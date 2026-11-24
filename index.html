@@ -118,7 +118,7 @@ body.playing .bar{opacity:0;pointer-events:none}body.playing .bar>*{pointer-even
 .play .cap{position:absolute;left:12px;right:12px;bottom:100%;margin-bottom:8px;text-align:center;font-size:14px;font-weight:500;color:var(--ink);text-shadow:0 0 10px #fff,0 0 4px #fff}
 #toasts{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:3}
 .toast{position:absolute;transform:translate(-50%,-100%);font-weight:600;font-size:14px;padding:4px 10px;border-radius:999px;background:#fffaf7;box-shadow:0 4px 14px #5a3f8a2e;white-space:nowrap;animation:rise 2.6s ease-out forwards}
-.toast.in{color:#1f7d5c}.toast.out{color:#b23642}.toast.save{color:#2f6fae}
+.toast.in{color:#1f7d5c}.toast.ok{color:#2f6fae}.toast.out{color:#b23642}.toast.save{color:#2f6fae}
 @keyframes rise{0%{opacity:0;margin-top:6px}12%{opacity:1}78%{opacity:1}100%{opacity:0;margin-top:-36px}}
 @media(max-width:600px){.play{gap:8px;padding:10px}.play .day{font-size:17px;min-width:62px}.play .bal{display:none}.toast{font-size:12px}}
 #loading{position:fixed;inset:0;display:grid;place-items:center;font-size:18px;color:var(--soft);transition:opacity .5s}
@@ -624,7 +624,8 @@ function startAnim(){if(view)close();const st=monthStats(month);unit=niceUnit(st
  const byDay={};st.tx.forEach(x=>{const d=clamp(x.d,1,days);(byDay[d]=byDay[d]||[]).push(x)});const ev=[];
  for(const d in byDay){const l=byDay[d];l.forEach((x,i)=>ev.push(Object.assign({},x,{t:(+d-1)+(i+0.5)/l.length*0.9})))}ev.sort((a,b)=>a.t-b.t);
  const sum=k=>st.tx.filter(x=>x.k===k).reduce((s,x)=>s+x.amt,0);
- anim={t:0,days,ev,i:0,bal:st.open,phase:'intro',intro:0,paused:false,reached:new Set(),done:false,queue:[],tq:[],inT:sum('in'),outT:sum('out'),saveT:sum('save')};
+ for(const id in SPOTS){const h=SPOTS[id];h.runOver=false;if(h.status==='over')setCoin(h,'ok')}
+ anim={spent:{},t:0,days,ev,i:0,bal:st.open,phase:'intro',intro:0,paused:false,reached:new Set(),done:false,queue:[],tq:[],inT:sum('in'),outT:sum('out'),saveT:sum('save')};
  pileTarget=clamp(Math.floor(Math.max(0,st.open)/unit),0,logs.length);pileShown=pileTarget;logs.forEach((l,i)=>{l.g.visible=i<pileShown;l.g.position.copy(l.base);l.drop=0});
  gardenTargets();snapGarden();tankLevel=S.tank.goal?clamp(startBal(S.tank,month)/S.tank.goal,0,1):0;
  const G=gardener;G.onArrive=null;G.onDone=null;G.row=-2;G.faceTo=null;route(FIRE_SPOT);G.after='fire';
@@ -633,7 +634,8 @@ function fireEv(e){const A=anim;
  if(e.k==='in'){A.bal+=e.amt;toast(`+${fmt(e.amt)} ${e.desc}`,new THREE.Vector3(PILE.x,4.2,PILE.z),'in');const G=gardener;if(G.state==='fire'||G.state==='chop'){G.chopN=Math.min(6,(G.state==='chop'?G.chopN:0)+3);if(G.state!=='chop'){G.chopT=0;G.hit=false}G.state='chop'}}else A.bal-=e.amt;
  const nt=clamp(Math.floor(Math.max(0,A.bal)/unit),0,logs.length);pileTarget=nt;
  if(e.k==='out'){const b=e.bill&&billById(e.bill),h=b&&b.spot&&SPOTS[b.spot];
-  if(h){h.pulse=1;toast(`−${fmt(e.amt)} ${b.name}`,new THREE.Vector3(h.ctr.x,h.ctr.y+1.5,h.ctr.z),'out')}else toast(`−${fmt(e.amt)} ${e.desc}`,new THREE.Vector3(1.9,3.4,-2.5),'out');
+  let over=false;if(b){A.spent[b.id]=(A.spent[b.id]||0)+e.amt;over=A.spent[b.id]>b.budget+0.005}
+  if(h){h.pulse=1;h.pulseOver=over;if(over&&!h.runOver){h.runOver=true;setCoin(h,'over')}toast(`−${fmt(e.amt)} ${b.name}`,new THREE.Vector3(h.ctr.x,h.ctr.y+1.5,h.ctr.z),over?'out':'ok')}else toast(`−${fmt(e.amt)} ${b?b.name:e.desc}`,new THREE.Vector3(1.9,3.4,-2.5),over?'out':'ok');
   const n=clamp(pileShown-nt,1,8);for(let i=0;i<n;i++)A.tq.push({d:i*0.12,dest:STOVE_MOUTH,cb:()=>{fireHeat=1}})}
  else if(e.k==='save'){const gi=e.goal==='tank'?-1:+String(e.goal).slice(4),g=gi<0?S.tank:S.goals[gi];if(!g)return;
   const dest=gi<0?new THREE.Vector3(2.5,6.9,-10.6):new THREE.Vector3(rows[gi].x,1,8);toast(`${fmt(e.amt)} → ${g.name}`,new THREE.Vector3(PILE.x,4.2,PILE.z),'save');
@@ -653,10 +655,12 @@ function nextTask(){const A=anim;if(!A||A.done)return;const k=A.queue.shift();if
   const pos=k==='tank'?new THREE.Vector3(2.5,9.2,-10.6):new THREE.Vector3(rows[k].x,2.6,SLOTZ(Math.max(0,seeds(g,month)-1)));
   toast(`+${fmt(g.a[month])}${k==='tank'?' · water rising':add>0?` · ${add} new plant${add===1?'':'s'}`:' · growing'}`,pos,'save')};
  G.onDone=nextTask}
-function finishAnim(){const A=anim;if(!A)return;A.done=true;A.phase='done';A.t=A.days;A.tq=[];A.reached=new Set(['tank',...S.goals.map((g,i)=>i)]);gardenTargets();restPile();updatePlaybar();
+function setCoin(h,k){if(!h.badge.visible)return;h.badge.material.map=coin[k].t;h.badge.material.needsUpdate=true}
+function restoreCoins(){for(const id in SPOTS){const h=SPOTS[id];if(h.status!=='none')setCoin(h,h.status)}}
+function finishAnim(){const A=anim;if(!A)return;restoreCoins();A.done=true;A.phase='done';A.t=A.days;A.tq=[];A.reached=new Set(['tank',...S.goals.map((g,i)=>i)]);gardenTargets();restPile();updatePlaybar();
  const G=gardener;G.onArrive=null;G.onDone=null;setTimeout(()=>{if(anim===A)sendGardener()},1400);setTimeout(()=>{if(anim===A)Sound.stop(3)},6000)}
 function skipAnim(){const A=anim;if(!A||A.done)return;while(A.i<A.ev.length){const e=A.ev[A.i++];A.bal+=e.k==='in'?e.amt:-e.amt}A.queue=[];finishAnim()}
-function stopAnim(){if(!anim)return;anim=null;Sound.stop();document.body.classList.remove('playing');restPile();gardenTargets();sendGardener()}
+function stopAnim(){if(!anim)return;anim=null;restoreCoins();Sound.stop();document.body.classList.remove('playing');restPile();gardenTargets();sendGardener()}
 const pEl=id=>document.getElementById(id);
 function updatePlaybar(){const A=anim;if(!A)return;const d=Math.min(A.days,Math.floor(A.t)+1);
  pEl('pDay').textContent=`${MONTHS[month]} ${A.phase==='month'||A.phase==='intro'?d:A.days}`;pEl('pBar').style.width=(A.t/A.days*100)+'%';
@@ -968,9 +972,9 @@ function tick(){const dt=Math.min(clock.getDelta(),0.05),t=clock.elapsedTime,k=1
   if(h.kind==='tank'||h.kind==='pile')continue;
   const pu=h.pulse>0?Math.sin(h.pulse*Math.PI):0;if(h.pulse>0)h.pulse=Math.max(0,h.pulse-dt*1.3);
   h.g.scale.setScalar(h.base*(1+(sel?0.04:0)+pu*0.14));
-  for(const m of h.mats){m.emissiveIntensity=pu>0?pu*0.55:sel?0.28:hov?0.14:0;if(pu>0)m.emissive.set(h.status==='over'?'#f0707a':'#ffbe5c');else if(sel||hov)m.emissive.set('#b9a7ea')}
-  if(h.ring){if(pu>0){h.ring.visible=true;h.ring.material.color.set(h.status==='over'?'#f0707a':'#ffbe5c');h.ring.material.opacity=0.9*pu;h.ring.scale.setScalar(1+0.35*pu)}
-   else if(h.status==='over'){const s=reduce?0.6:(Math.sin(t*4.5+h.phase)+1)/2;h.ring.visible=true;h.ring.material.color.set('#f0707a');h.ring.material.opacity=sel?0.95:0.3+0.55*s;h.ring.scale.setScalar(1+0.12*s)}
+  for(const m of h.mats){m.emissiveIntensity=pu>0?pu*0.55:sel?0.28:hov?0.14:0;if(pu>0)m.emissive.set(h.pulseOver?'#f0707a':'#7fb8ec');else if(sel||hov)m.emissive.set('#b9a7ea')}
+  if(h.ring){if(pu>0){h.ring.visible=true;h.ring.material.color.set(h.pulseOver?'#f0707a':'#7fb8ec');h.ring.material.opacity=0.9*pu;h.ring.scale.setScalar(1+0.35*pu)}
+   else if(anim&&!anim.done?h.runOver:h.status==='over'){const s=reduce?0.6:(Math.sin(t*4.5+h.phase)+1)/2;h.ring.visible=true;h.ring.material.color.set('#f0707a');h.ring.material.opacity=sel?0.95:0.3+0.55*s;h.ring.scale.setScalar(1+0.12*s)}
    else{h.ring.visible=sel;h.ring.material.color.set('#b9a7ea');h.ring.material.opacity=0.85;h.ring.scale.setScalar(1)}}
   if(h.badge.visible){h.badge.position.y=h.badge.userData.y;h.badge.scale.setScalar(h.status==='over'?0.9:sel?0.85:0.62)}}
  const tb=anim&&!anim.done&&!anim.reached.has('tank')?startBal(S.tank,month):balance(S.tank,month);const lv=S.tank.goal?clamp(tb/S.tank.goal,0,1):0;tankLevel+=(lv-tankLevel)*(1-Math.exp(-dt*2.5));gauge.scale.y=Math.max(0.01,2.8*tankLevel);gauge.position.y=-1.4+1.4*tankLevel;
