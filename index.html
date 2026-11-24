@@ -102,6 +102,22 @@ textarea{width:100%;font:13px/1.4 ui-monospace,Menlo,monospace;color:var(--ink);
 .msg{margin:10px 0 0;font-size:15px}
 details.edit{margin-top:14px;border-top:1px solid var(--line);padding-top:8px}
 details.edit summary{cursor:pointer;font-weight:600;min-height:40px;display:flex;align-items:center}
+.sheet{z-index:5}
+.play{position:fixed;z-index:4;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(580px,calc(100% - 24px));background:#fffaf7f0;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:22px;box-shadow:0 14px 40px #5a3f8a33;padding:12px 14px;display:none;gap:12px;align-items:center}
+body.playing .play{display:flex}
+body.playing .bar{opacity:0;pointer-events:none}body.playing .bar>*{pointer-events:none}
+.play .day{font-weight:700;font-size:20px;min-width:76px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.play .track2{flex:1;height:10px;border-radius:99px;background:#efe9f5;overflow:hidden}.play .track2 i{display:block;height:100%;background:var(--lav);border-radius:99px;width:0}
+.play .bal{font-size:13px;color:var(--soft);white-space:nowrap}.play .bal b{display:block;font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}
+.play .bal b.neg{color:var(--coral)}
+.play .pb{width:44px;height:44px;border:0;border-radius:50%;background:var(--ink);color:#fff;font:600 16px/1 Fredoka,sans-serif;cursor:pointer;flex:none}
+.play .pb.ghost{background:#f2edf8;color:var(--ink)}
+.play .cap{position:absolute;left:12px;right:12px;bottom:100%;margin-bottom:8px;text-align:center;font-size:14px;font-weight:500;color:var(--ink);text-shadow:0 0 10px #fff,0 0 4px #fff}
+#toasts{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:3}
+.toast{position:absolute;transform:translate(-50%,-100%);font-weight:600;font-size:14px;padding:4px 10px;border-radius:999px;background:#fffaf7;box-shadow:0 4px 14px #5a3f8a2e;white-space:nowrap;animation:rise 2s ease-out forwards}
+.toast.in{color:#1f7d5c}.toast.out{color:#b23642}.toast.save{color:#2f6fae}
+@keyframes rise{0%{opacity:0;margin-top:6px}12%{opacity:1}78%{opacity:1}100%{opacity:0;margin-top:-36px}}
+@media(max-width:600px){.play{gap:8px;padding:10px}.play .day{font-size:17px;min-width:62px}.play .bal{display:none}.toast{font-size:12px}}
 #loading{position:fixed;inset:0;display:grid;place-items:center;font-size:18px;color:var(--soft);transition:opacity .5s}
 @media(max-width:600px){
  .brand h1{font-size:26px}.brand p{display:none}
@@ -126,11 +142,14 @@ details.edit summary{cursor:pointer;font-weight:600;min-height:40px;display:flex
 
 <div class="bar">
  <span class="hint" id="hint"></span>
+ <button class="btn ghost" id="playBtn">▶ Play month</button>
  <button class="btn" id="budgetBtn">Budget</button>
  <span class="tag-sample" id="sampleTag">Sample budget</span>
 </div>
 
 <aside class="sheet" id="sheet" aria-live="polite"></aside>
+<div id="toasts" aria-hidden="true"></div>
+<div class="play" id="play" role="region" aria-label="Month playback"><span class="cap" id="pCap" aria-live="polite"></span><span class="day" id="pDay">Nov 1</span><div class="track2"><i id="pBar"></i></div><span class="bal">Checking<b id="pBal">$0</b></span><button class="pb ghost" id="pToggle" aria-label="Pause">❚❚</button><button class="pb" id="pSkip" aria-label="Skip to the end">»</button></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -141,7 +160,7 @@ if(!window.THREE){document.getElementById('loading').textContent='The 3D engine 
 const MONTHS=['Sep','Oct','Nov'];
 const CATS=['Housing','Food','Transportation','Utilities','Insurance','Subscriptions','Family','Home','Health','Pets','Wants','Giving','Other'];
 const SAMPLE={
- income:[5300,5300,5300],
+ income:[5300,5300,5300],open0:600,tx:{},
  bills:[
   {id:'mortgage',name:'Mortgage',cat:'Housing',budget:1320,a:[1320,1320,1320],due:'the 1st',note:'Escrow covers property taxes and homeowners insurance.',spot:'mailbox'},
   {id:'groceries',name:'Groceries',cat:'Food',budget:1000,a:[962,1048,1115],due:'weekly',note:'Thanksgiving week pushed November over.',spot:'fridge'},
@@ -174,15 +193,18 @@ const KEY='budget-house-v3';
 const clone=o=>JSON.parse(JSON.stringify(o));
 let S=clone(SAMPLE),edited=false;
 try{const raw=localStorage.getItem(KEY);if(raw){const v=JSON.parse(raw);if(v&&Array.isArray(v.bills)&&v.tank&&Array.isArray(v.goals)&&v.goals.length===4&&Array.isArray(v.income)){S=v;edited=true}}}catch(e){}
-function save(){edited=true;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
-const SLOTS=8,FULL=6;
+if(!S.tx||typeof S.tx!=='object')S.tx={};if(!(S.open0>=0))S.open0=600;
+function save(keepTx){edited=true;if(!keepTx&&S.tx)delete S.tx[month];try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+const SLOTS=10;
 let month=2;
 const num=v=>{const n=parseFloat(String(v).replace(/[$,\s]/g,''));return isFinite(n)?Math.max(0,n):0};
 const fmt=n=>'$'+Math.round(n).toLocaleString('en-US');
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const balance=(g,m)=>g.start+g.a.slice(0,m+1).reduce((s,v)=>s+v,0);
-const seeds=(g,m)=>g.target>0?clamp(Math.round(g.a[m]/g.target*FULL),0,SLOTS):(g.a[m]>0?FULL:0);
+const plantsFor=(g,bal)=>g.goal>0?clamp(Math.floor(bal/g.goal*SLOTS+1e-9),0,SLOTS):0;
+const seeds=(g,m)=>plantsFor(g,balance(g,m));
+const startBal=(g,m)=>m>0?balance(g,m-1):g.start;
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const uid=()=>'b'+Math.random().toString(36).slice(2,8);
 
@@ -264,7 +286,7 @@ const coin={};for(const k in COINS)coin[k]=canvasTex(128,128,x=>coinDraw(x,...CO
 function reg(g,id,opt={}){
  world.updateMatrixWorld(true);
  const bb=new THREE.Box3().setFromObject(g),size=bb.getSize(new THREE.Vector3()),ctr=bb.getCenter(new THREE.Vector3());
- const h={id,g,kind:opt.kind||'spot',label:opt.label||id,suggest:opt.suggest||null,cat:opt.cat||null,room:opt.room||'',mats:[],base:g.scale.x,phase:rnd()*6,ctr,status:'none'};
+ const h={id,g,kind:opt.kind||'spot',label:opt.label||id,suggest:opt.suggest||null,cat:opt.cat||null,room:opt.room||'',mats:[],base:g.scale.x,phase:rnd()*6,ctr,status:'none',pulse:0};
  g.traverse(o=>{if(!o.isMesh)return;o.userData.hot=h;targets.push(o);if(o.material.emissive&&!o.userData.keep){o.material=o.material.clone();h.mats.push(o.material)}});
  if(h.kind==='spot'){
   if(!opt.wall){const r=Math.max(size.x,size.z)*0.6+0.3;
@@ -395,6 +417,35 @@ box(world,17,0.12,0.08,white,8.6,0.95,-13.82,0.03);box(world,0.08,0.12,28,white,
  box(g,0.9,1.6,0.06,'#f6e7da',0.3,0,1.11,0.04);mesh(g,sph(0.06),'#3d3a52',0.62,0.8,1.16);box(g,0.6,0.5,0.06,B('#d6efff'),-0.75,1.05,1.11,0.02).userData.keep=true;
  const rk=mesh(g,cyl(.04,.04,1.7,8),'#c99c76',-1.2,0.85,1.25);rk.rotation.z=0.2;spot(g,'shed','Tool shed','Garden',{suggest:'Home repairs',cat:'Home'})}
 
+/* ---------- Checking account: woodpile and outdoor stove ---------- */
+const PILE={x:2.0,z:-6.0,cols:6,layers:10},logs=[];let pileShown=0,pileTarget=0,unit=100,pileTimer=0;
+{const g=grp(world,PILE.x,0.25,PILE.z);
+ box(g,1.5,0.12,2.5,'#8a6a52',0,0,0,0.03);[-1.2,1.2].forEach(z=>{box(g,0.12,3.5,0.12,'#8a6a52',-0.55,0,z,0.03);box(g,0.12,3.5,0.12,'#8a6a52',0.55,0,z,0.03)});
+ const logGeo=cyl(.16,.16,1.25,10),endGeo=new THREE.CircleGeometry(.14,10);
+ for(let l=0;l<PILE.layers;l++)for(let c=0;c<PILE.cols;c++){const lg=new THREE.Group();lg.position.set(0,0.3+l*0.32,-0.9+c*0.36);
+  const m=new THREE.Mesh(logGeo,M(['#b07a52','#a56f48','#bb8659'][(l+c)%3]));m.rotation.z=Math.PI/2;shade(m);lg.add(m);
+  const e=new THREE.Mesh(endGeo,M('#f2d4a8'));e.position.x=0.63;e.rotation.y=Math.PI/2;lg.add(e);lg.visible=false;g.add(lg);logs.push({g:lg,base:lg.position.clone(),drop:0})}
+ hitBox(g,1.6,3.6,2.6);reg(g,'pile',{kind:'pile'})}
+let fireLight,fireGlow,fireHeat=0;const smoke=[];
+{const g=grp(world,1.9,0.25,-2.5);[[-0.4,-0.4],[0.4,-0.4],[-0.4,0.4],[0.4,0.4]].forEach(([x,z])=>mesh(g,cyl(.06,.05,.45,8),'#3d3a52',x,0.22,z));
+ mesh(g,cyl(.72,.72,1.3,24),'#4a4560',0,1.1,0,{roughness:.6});mesh(g,cyl(.8,.8,.1,24),'#3d3a52',0,1.8,0);mesh(g,cyl(.8,.8,.1,24),'#3d3a52',0,0.45,0);
+ const door=grp(g,0.55,1.05,0.55,Math.PI/4);box(door,0.66,0.56,0.08,'#3d3a52',0,-0.28,0,0.04);
+ fireGlow=new THREE.Mesh(new THREE.PlaneGeometry(0.46,0.34),new THREE.MeshBasicMaterial({color:'#ffb347'}));fireGlow.position.set(0,0,0.05);fireGlow.userData.keep=true;door.add(fireGlow);
+ mesh(g,cyl(.16,.16,2.6,12),'#5a5470',-0.2,3.1,-0.2);mesh(g,cyl(.3,.3,.08,12),'#3d3a52',-0.2,4.45,-0.2);
+ fireLight=new THREE.PointLight(0xff9a4a,0.4,7);fireLight.position.set(1.0,1.2,1.0);g.add(fireLight);
+ reg(g,'stove2',{kind:'pile'});
+ for(let i=0;i<10;i++){const sm=new THREE.Mesh(sph(0.22),new THREE.MeshBasicMaterial({color:'#ebe6f2',transparent:true,opacity:0,depthWrite:false}));sm.visible=false;world.add(sm);smoke.push({m:sm,life:0})}}
+const STOVE_MOUTH=new THREE.Vector3(2.4,1.3,-2.0),CHIMNEY=new THREE.Vector3(1.7,4.7,-2.7);
+const fliers=[];for(let i=0;i<14;i++){const fm=new THREE.Mesh(cyl(.16,.16,1.25,10),M('#b07a52'));fm.rotation.z=Math.PI/2;fm.visible=false;fm.castShadow=true;world.add(fm);fliers.push({m:fm,t:1,a:new THREE.Vector3(),b:new THREE.Vector3(),dur:.7,onEnd:null})}
+function fly(a,b,dur,onEnd){const f=fliers.find(x=>x.t>=1);if(!f){onEnd&&onEnd();return}f.a.copy(a);f.b.copy(b);f.t=0;f.dur=dur;f.onEnd=onEnd;f.m.visible=true;f.m.position.copy(a)}
+function tickFliers(dt){for(const f of fliers){if(f.t>=1)continue;f.t=Math.min(1,f.t+dt/f.dur);f.m.position.lerpVectors(f.a,f.b,f.t);f.m.position.y+=Math.sin(f.t*Math.PI)*2.2;f.m.rotation.x+=dt*9;if(f.t>=1){f.m.visible=false;const cb=f.onEnd;f.onEnd=null;cb&&cb()}}}
+function tickPile(dt){pileTimer-=dt;if(pileTimer<=0){if(pileShown<pileTarget){const l=logs[pileShown++];l.g.visible=true;l.drop=1;pileTimer=anim?0.045:0.012}
+  else if(pileShown>pileTarget&&!(anim&&anim.tq.length)){logs[--pileShown].g.visible=false;pileTimer=anim?0.04:0.012}}
+ for(const l of logs)if(l.drop>0){l.drop=Math.max(0,l.drop-dt*2.6);l.g.position.y=l.base.y+l.drop*l.drop*5}}
+function tickFire(dt,t){fireHeat=Math.max(0,fireHeat-dt*0.45);const f=0.5+0.5*Math.sin(t*13)*Math.sin(t*7.3);fireLight.intensity=0.3+fireHeat*1.5+f*0.15;fireGlow.material.color.setRGB(1,0.5+0.3*fireHeat+0.1*f,0.15+0.25*fireHeat);
+ if(fireHeat>0.12&&!reduce&&Math.random()<dt*7*fireHeat){const p=smoke.find(x=>x.life<=0);if(p){p.life=1;p.m.visible=true;p.m.position.copy(CHIMNEY);p.m.scale.setScalar(0.6)}}
+ for(const p of smoke){if(p.life<=0)continue;p.life-=dt*0.45;p.m.position.y+=dt*1.2;p.m.position.x+=dt*0.3;p.m.scale.setScalar(0.6+(1-p.life)*1.5);p.m.material.opacity=Math.max(0,p.life)*0.75;if(p.life<=0)p.m.visible=false}}
+
 const stemM=M('#7cc47a'),leafM=M('#93d48a');
 function leaf(g,y,side){const l=mesh(g,sph(0.2),leafM,side*0.17,y,0);l.scale.set(1.2,.3,.6);l.rotation.z=side*0.5;return l}
 function makePlant(kind){const g=new THREE.Group();g.rotation.y=Math.PI/4;
@@ -434,13 +485,13 @@ function packetDraw(i,m){const gl=S.goals[i],lk=GOAL_LOOK[i],x=lk.tex.c.getConte
  x.font='600 23px Fredoka, sans-serif';x.fillText(`${fmt(gl.a[m])} in ${MONTHS[m]}`,128,252);
  const bal=balance(gl,m),p=gl.goal>0?Math.min(1,bal/gl.goal):0;x.fillStyle='#ffffffa8';rrect(x,34,270,188,18,9);x.fill();x.fillStyle=lk.ink;rrect(x,34,270,Math.max(18,188*p),18,9);x.fill();
  x.font='500 18px Fredoka, sans-serif';x.fillText(`${fmt(bal)} of ${fmt(gl.goal)}`,128,318);lk.tex.t.needsUpdate=true}
-const ROWX=[5.8,8.9,12.0,15.1],slots=[],SLOTZ=s=>-10+s*2.35;
+const ROWX=[5.8,8.9,12.0,15.1],slots=[],SLOTZ=s=>-10+s*1.85;
 GOAL_LOOK.forEach((lk,i)=>{const x=ROWX[i];
  box(world,2.0,0.22,19,'#a8775c',x,0.25,-1.5,0.12);
- for(let s=0;s<SLOTS;s++){const z=SLOTZ(s);const mo=mesh(world,sph(0.36),'#93644a',x,0.47,z);mo.scale.set(1,.32,1);
+ for(let s=0;s<SLOTS;s++){const z=SLOTZ(s);const mo=mesh(world,sph(0.32),'#93644a',x,0.47,z);mo.scale.set(1,.32,1);
   const p=makePlant(lk.plant);p.position.set(x,0.5,z);p.scale.setScalar(0.001);world.add(p);slots.push({g:p,row:i,s,cur:0,target:0,delay:0,phase:rnd()*6})}
- mesh(world,cyl(.07,.07,2.4,8),'#c99c76',x,1.45,10.1);
- const pk=grp(world,x,2.5,10.16);pk.rotation.x=-0.12;
+ mesh(world,cyl(.07,.07,2.4,8),'#c99c76',x,1.45,10.24);
+ const pk=grp(world,x,2.5,10.3);pk.rotation.x=-0.12;
  lk.tex=canvasTex(256,344,()=>{});const side=M('#fffaf3');
  const pm=new THREE.Mesh(new THREE.BoxGeometry(2.0,2.7,0.06),[side,side,side,side,new THREE.MeshStandardMaterial({map:lk.tex.t,roughness:.9}),side]);pm.position.y=0.75;shade(pm);pk.add(pm);pm.userData.keep=true;
  const h=reg(pk,'goal'+i,{kind:'goal'});h.gi=i});
@@ -486,12 +537,88 @@ const gardener={g:grp(world,3.4,0.25,5.2),path:[],state:'idle',timer:0,row:-1,fa
  Object.assign(gardener,{legL,legR,armL,armR,can,tip});g.traverse(o=>{if(o.isMesh)o.castShadow=true})}
 const drops=[];for(let i=0;i<10;i++){const d=new THREE.Mesh(sph(0.045),B('#7fc3f5'));d.visible=false;world.add(d);drops.push({m:d,v:new THREE.Vector3(),life:0})}
 const tipW=new THREE.Vector3();
+const V=(x,z)=>new THREE.Vector3(x,0,z);
+const FIRE_SPOT=V(3.3,-3.9),TANK_SPOT=V(2.4,-8.3),HOME_SPOT=V(3.4,5.6);
 function activeRow(){let best=-1,bv=0;S.goals.forEach((g,i)=>{const v=g.a[month]>0?(g.target>0?g.a[month]/g.target:1):0;if(v>bv){bv=v;best=i}});return best}
 function pickSlotZ(r){const n=seeds(S.goals[r],month);const s=n>0?Math.floor(rnd()*n):0;return SLOTZ(s)}
-function sendGardener(){const r=activeRow();gardener.row=r;gardener.path=[];const p=gardener.g.position;
- if(r<0){gardener.path.push(new THREE.Vector3(p.x,0,8.6),new THREE.Vector3(3.4,0,8.6),new THREE.Vector3(3.4,0,5.2));gardener.state='walk';return}
- const x=ROWX[r]-1.55;if(Math.abs(p.x-x)>0.2){gardener.path.push(new THREE.Vector3(p.x,0,8.6),new THREE.Vector3(x,0,8.6))}
- gardener.path.push(new THREE.Vector3(x,0,pickSlotZ(r)));gardener.state='walk'}
+function route(to){const p=gardener.g.position,pts=[],inG=x=>x>4.4;let cx=p.x,cz=p.z;
+ if(inG(cx)&&!(inG(to.x)&&Math.abs(cx-to.x)<0.3)){pts.push(V(cx,8.9),V(4.1,8.9));cx=4.1;cz=8.9}
+ if(inG(to.x)&&Math.abs(cx-to.x)>0.3){if(!inG(cx))pts.push(V(4.1,cz),V(4.1,8.9));pts.push(V(to.x,8.9))}
+ else if(!inG(to.x)&&!inG(cx)&&Math.abs(cx-to.x)+Math.abs(cz-to.z)>0.3)pts.push(V(4.1,cz),V(4.1,to.z));
+ pts.push(V(to.x,to.z));gardener.path=pts;gardener.state='walk'}
+function sendGardener(){if(anim&&!anim.done)return;const r=activeRow(),G=gardener;G.row=r;G.faceTo=null;G.onArrive=null;G.onDone=null;
+ if(r<0){route(HOME_SPOT);G.after='idle';return}route(V(ROWX[r]-1.55,pickSlotZ(r)));G.after='water'}
+
+/* ---------- Monthly playback ---------- */
+const DAYS=[30,31,30],DAYDUR=0.8;
+let anim=null;
+function dueDay(due,i){const m=/(\d+)/.exec(due||'');return m?clamp(+m[1],1,28):3+(i*5)%24}
+function genTx(m){const tx=[],inc=S.income[m]||0;
+ if(inc>0){const h=Math.round(inc/2);tx.push({d:1,desc:'Paycheck',amt:h,k:'in'},{d:15,desc:'Paycheck',amt:inc-h,k:'in'})}
+ S.bills.forEach((b,i)=>{const v=b.a[m];if(!(v>0))return;const weekly=/weekly/.test(b.due||''),fixed=/\d/.test(b.due||'');
+  const days=weekly?[4,11,18,25]:fixed?[dueDay(b.due,i)]:v>150?[6,14,23]:[8,21];let left=v;
+  days.forEach((d,j)=>{const part=j===days.length-1?left:Math.round(v/days.length*(0.85+((i+j)%3)*0.15));left-=part;tx.push({d:clamp(d+(fixed?0:(i%3)-1),1,28),desc:b.name,amt:Math.max(0,part),k:'out',bill:b.id})})});
+ if(S.tank.a[m]>0)tx.push({d:2,desc:'Transfer to '+S.tank.name,amt:S.tank.a[m],k:'save',goal:'tank'});
+ S.goals.forEach((g,i)=>{if(g.a[m]>0)tx.push({d:16,desc:'Transfer to '+g.name,amt:g.a[m],k:'save',goal:'goal'+i})});
+ return tx.sort((a,b)=>a.d-b.d)}
+const txFor=m=>Array.isArray(S.tx[m])&&S.tx[m].length?S.tx[m]:genTx(m);
+function opening(m){let o=S.open0||0;for(let k=0;k<m;k++)o+=txFor(k).reduce((s,x)=>s+(x.k==='in'?x.amt:-x.amt),0);return o}
+function niceUnit(mx){const raw=Math.max(25,mx/(logs.length*0.92));return [25,50,100,150,200,250,500,1000,2000,5000].find(s=>s>=raw)||Math.ceil(raw/1000)*1000}
+function monthStats(m){const tx=txFor(m),open=opening(m);let b=open,mx=Math.max(open,1);tx.forEach(x=>{b+=x.k==='in'?x.amt:-x.amt;mx=Math.max(mx,b)});return{tx,open,end:b,max:mx}}
+function restPile(){const st=monthStats(month);unit=niceUnit(st.max);pileTarget=clamp(Math.floor(Math.max(0,st.end)/unit),0,logs.length)}
+function gardenTargets(){S.goals.forEach((gl,i)=>{const n=anim&&!anim.done&&!anim.reached.has(i)?plantsFor(gl,startBal(gl,month)):seeds(gl,month);let k=0;
+ slots.filter(s=>s.row===i).forEach(s=>{const t=s.s<n?1:0;if(t&&!s.target)s.delay=0.15+k++*0.22;else if(!t)s.delay=0;s.target=t})})}
+function snapGarden(){for(const s of slots){s.cur=s.target;s.delay=0}}
+const toastsEl=document.getElementById('toasts'),tv=new THREE.Vector3();
+function toast(text,pos,cls){tv.copy(pos);world.localToWorld(tv);tv.project(cam);const x=(tv.x+1)/2*innerWidth,y=(1-tv.y)/2*innerHeight;if(x<0||x>innerWidth||y<40||y>innerHeight)return;
+ while(toastsEl.children.length>9)toastsEl.firstChild.remove();const el=document.createElement('div');el.className='toast '+cls;el.textContent=text;el.style.left=clamp(x,70,innerWidth-70)+'px';el.style.top=y+'px';toastsEl.appendChild(el);setTimeout(()=>el.remove(),2100)}
+const pileTop=()=>new THREE.Vector3(PILE.x,0.25+0.3+Math.max(0,pileShown)*0.32/PILE.cols+0.9,PILE.z);
+function startAnim(){if(view)close();const st=monthStats(month);unit=niceUnit(st.max);const days=DAYS[month];
+ const byDay={};st.tx.forEach(x=>{const d=clamp(x.d,1,days);(byDay[d]=byDay[d]||[]).push(x)});const ev=[];
+ for(const d in byDay){const l=byDay[d];l.forEach((x,i)=>ev.push(Object.assign({},x,{t:(+d-1)+(i+0.5)/l.length*0.9})))}ev.sort((a,b)=>a.t-b.t);
+ const sum=k=>st.tx.filter(x=>x.k===k).reduce((s,x)=>s+x.amt,0);
+ anim={t:0,days,ev,i:0,bal:st.open,phase:'intro',intro:0,paused:false,reached:new Set(),done:false,queue:[],tq:[],inT:sum('in'),outT:sum('out'),saveT:sum('save')};
+ pileTarget=clamp(Math.floor(Math.max(0,st.open)/unit),0,logs.length);pileShown=pileTarget;logs.forEach((l,i)=>{l.g.visible=i<pileShown;l.g.position.copy(l.base);l.drop=0});
+ gardenTargets();snapGarden();tankLevel=S.tank.goal?clamp(startBal(S.tank,month)/S.tank.goal,0,1):0;
+ const G=gardener;G.onArrive=null;G.onDone=null;G.row=-2;G.faceTo=null;route(FIRE_SPOT);G.after='fire';
+ selected=null;flyTo(null);document.body.classList.add('playing');updatePlaybar()}
+function fireEv(e){const A=anim;
+ if(e.k==='in'){A.bal+=e.amt;toast(`+${fmt(e.amt)} ${e.desc}`,new THREE.Vector3(PILE.x,4.2,PILE.z),'in')}else A.bal-=e.amt;
+ const nt=clamp(Math.floor(Math.max(0,A.bal)/unit),0,logs.length);pileTarget=nt;
+ if(e.k==='out'){const b=e.bill&&billById(e.bill),h=b&&b.spot&&SPOTS[b.spot];
+  if(h){h.pulse=1;toast(`−${fmt(e.amt)} ${b.name}`,new THREE.Vector3(h.ctr.x,h.ctr.y+1.5,h.ctr.z),'out')}else toast(`−${fmt(e.amt)} ${e.desc}`,new THREE.Vector3(1.9,3.4,-2.5),'out');
+  const n=clamp(pileShown-nt,1,5);for(let i=0;i<n;i++)A.tq.push({d:i*0.12,dest:STOVE_MOUTH,cb:()=>{fireHeat=1}})}
+ else if(e.k==='save'){const gi=e.goal==='tank'?-1:+String(e.goal).slice(4),g=gi<0?S.tank:S.goals[gi];if(!g)return;
+  const dest=gi<0?new THREE.Vector3(2.5,6.9,-10.6):new THREE.Vector3(ROWX[gi],1,8);toast(`${fmt(e.amt)} → ${g.name}`,new THREE.Vector3(PILE.x,4.2,PILE.z),'save');
+  const n=clamp(pileShown-nt,1,3);for(let i=0;i<n;i++)A.tq.push({d:i*0.14,dest,cb:null})}}
+function doToss(q){let from;if(pileShown>pileTarget&&pileShown>0){const l=logs[--pileShown];l.g.visible=false;from=new THREE.Vector3(PILE.x+l.base.x,0.25+l.base.y,PILE.z+l.base.z)}else from=pileTop();
+ gardener.toss=0.35;fly(from,q.dest,0.75,q.cb)}
+function tickAnim(dt){const A=anim;if(!A||A.paused)return;
+ for(let i=A.tq.length-1;i>=0;i--){const q=A.tq[i];q.d-=dt;if(q.d<=0){A.tq.splice(i,1);doToss(q)}}
+ if(A.phase==='intro'){A.intro+=dt;const G=gardener;if(G.state==='fire'||A.intro>3.5){if(G.state!=='fire'){G.path=[];G.g.position.set(FIRE_SPOT.x,0.25,FIRE_SPOT.z);G.state='fire'}A.phase='month'}}
+ else if(A.phase==='month'){A.t=Math.min(A.days,A.t+dt/DAYDUR);while(A.i<A.ev.length&&A.ev[A.i].t<=A.t)fireEv(A.ev[A.i++]);if(A.t>=A.days&&A.i>=A.ev.length&&!A.tq.length){A.phase='end';beginEnd()}}
+ updatePlaybar()}
+function beginEnd(){const A=anim;A.queue=[];if(S.tank.a[month]>0)A.queue.push('tank');S.goals.forEach((g,i)=>{if(g.a[month]>0)A.queue.push(i)});nextTask()}
+function nextTask(){const A=anim;if(!A||A.done)return;const k=A.queue.shift();if(k===undefined)return finishAnim();const G=gardener,g=k==='tank'?S.tank:S.goals[k];
+ if(k==='tank'){route(TANK_SPOT);G.faceTo=Math.PI;G.row=-3}else{const n=Math.max(1,seeds(g,month));route(V(ROWX[k]-1.55,SLOTZ(n-1)));G.faceTo=Math.PI/2;G.row=k}
+ G.after='work';
+ G.onArrive=()=>{A.reached.add(k);gardenTargets();const add=plantsFor(g,balance(g,month))-plantsFor(g,startBal(g,month));
+  const pos=k==='tank'?new THREE.Vector3(2.5,9.2,-10.6):new THREE.Vector3(ROWX[k],2.6,SLOTZ(Math.max(0,seeds(g,month)-1)));
+  toast(`+${fmt(g.a[month])}${k==='tank'?' · water rising':add>0?` · ${add} new plant${add===1?'':'s'}`:' · growing'}`,pos,'save')};
+ G.onDone=nextTask}
+function finishAnim(){const A=anim;if(!A)return;A.done=true;A.phase='done';A.t=A.days;A.tq=[];A.reached=new Set(['tank',0,1,2,3]);gardenTargets();restPile();updatePlaybar();
+ const G=gardener;G.onArrive=null;G.onDone=null;setTimeout(()=>{if(anim===A)sendGardener()},1400)}
+function skipAnim(){const A=anim;if(!A||A.done)return;while(A.i<A.ev.length){const e=A.ev[A.i++];A.bal+=e.k==='in'?e.amt:-e.amt}A.queue=[];finishAnim()}
+function stopAnim(){if(!anim)return;anim=null;document.body.classList.remove('playing');restPile();gardenTargets();sendGardener()}
+const pEl=id=>document.getElementById(id);
+function updatePlaybar(){const A=anim;if(!A)return;const d=Math.min(A.days,Math.floor(A.t)+1);
+ pEl('pDay').textContent=`${MONTHS[month]} ${A.phase==='month'||A.phase==='intro'?d:A.days}`;pEl('pBar').style.width=(A.t/A.days*100)+'%';
+ const pb=pEl('pBal');pb.textContent=(A.bal<0?'−':'')+fmt(Math.abs(A.bal));pb.classList.toggle('neg',A.bal<0);
+ pEl('pCap').textContent=A.phase==='intro'?'Heading to the woodpile…':A.phase==='month'?(A.paused?'Paused':'Paychecks stack the woodpile · spending feeds the stove'):A.phase==='end'?'Month’s done · off to tend the savings':`${MONTHS[month]}: ${fmt(A.inT)} in · ${fmt(A.outT)} spent · ${fmt(A.saveT)} saved`;
+ const t=pEl('pToggle'),k=pEl('pSkip');t.textContent=A.done?'↻':A.paused?'▶':'❚❚';t.setAttribute('aria-label',A.done?'Replay':A.paused?'Play':'Pause');k.textContent=A.done?'×':'»';k.setAttribute('aria-label',A.done?'Close playback':'Skip to the end')}
+pEl('pToggle').addEventListener('click',()=>{if(!anim)return;if(anim.done)startAnim();else{anim.paused=!anim.paused;updatePlaybar()}});
+pEl('pSkip').addEventListener('click',()=>{if(!anim)return;if(anim.done)stopAnim();else skipAnim()});
+pEl('playBtn').addEventListener('click',()=>startAnim());
 
 /* Butterflies */
 const flies=[];
@@ -506,8 +633,8 @@ const isOver=b=>b.a[month]>b.budget;
 function applyMonth(rerender=true){let overN=0;
  for(const id in SPOTS){const h=SPOTS[id],b=billAt(id);h.status=b?(isOver(b)?'over':'ok'):(h.suggest?'idea':'none');if(h.status==='over')overN++;
   h.badge.visible=h.status!=='none';if(h.badge.visible){h.badge.material.map=coin[h.status].t;h.badge.material.needsUpdate=true}}
- S.goals.forEach((gl,i)=>{packetDraw(i,month);const n=seeds(gl,month);let k=0;slots.filter(s=>s.row===i).forEach(s=>{const t=s.s<n?1:0;if(t&&!s.target)s.delay=0.15+k++*0.09;else s.delay=0;s.target=t})});
- plaqueDraw(month);if(activeRow()!==gardener.row)sendGardener();
+ S.goals.forEach((gl,i)=>packetDraw(i,month));gardenTargets();
+ plaqueDraw(month);if(!anim){restPile();if(activeRow()!==gardener.row)sendGardener()}
  const spent=S.bills.reduce((s,b)=>s+b.a[month],0),saved=[S.tank,...S.goals].reduce((s,g)=>s+g.a[month],0),left=S.income[month]-spent-saved;
  document.getElementById('stats').innerHTML=[['Take-home',S.income[month]],['Bills',spent],['Saved',saved,'saved'],['Left over',left,left<0?'neg':'']]
   .map(([l,v,c])=>`<div class="stat ${c||''}"><span>${l}</span><b>${v<0?'−':''}${fmt(Math.abs(v))}</b></div>`).join('');
@@ -517,7 +644,7 @@ function applyMonth(rerender=true){let overN=0;
  if(rerender&&view)render()}
 const mEl=document.getElementById('months');
 mEl.innerHTML=MONTHS.map((m,i)=>`<button type="button" data-m="${i}">${m}</button>`).join('');
-mEl.addEventListener('click',e=>{const b=e.target.closest('button');if(b){month=+b.dataset.m;applyMonth()}});
+mEl.addEventListener('click',e=>{const b=e.target.closest('button');if(b){if(anim)stopAnim();month=+b.dataset.m;applyMonth()}});
 
 /* ---------- Sheet views ---------- */
 const sheet=document.getElementById('sheet');let view=null,selected=null,budgetTab='overview',uploadMsg='';
@@ -547,16 +674,22 @@ function vSpot(h){const others=S.bills.filter(b=>b.spot!==h.id);
  <div class="actions"><button class="btn sm" data-act="addHere" data-spot="${h.id}">Add bill</button></div>
  ${others.length?`<h3>Or move an existing bill here</h3><div class="grid2"><select id="m-bill" aria-label="Bill to move">${others.map(b=>`<option value="${b.id}">${esc(b.name)}${b.spot&&SPOTS[b.spot]?' (in '+esc(SPOTS[b.spot].label)+')':''}</option>`).join('')}</select><button class="btn sm ghost" data-act="moveHere" data-spot="${h.id}">Move here</button></div>`:''}`}
 function vGoal(h){const tank=h.kind==='tank',g=tank?S.tank:S.goals[h.gi],v=g.a[month],bal=balance(g,month),met=v>=g.target,left=Math.max(0,g.goal-bal),mo=g.target>0?Math.ceil(left/g.target):0;
- const where=tank?`The water tower · ${g.goal?Math.round(bal/g.goal*100):0}% full`:`Garden row ${h.gi+1} · ${seeds(g,month)} of ${SLOTS} seeds planted in ${MONTHS[month]}${gardener.row===h.gi?' · the gardener is working here':''}`;
+ const where=tank?`The water tower · ${g.goal?Math.round(bal/g.goal*100):0}% full`:`Garden row ${h.gi+1} · ${seeds(g,month)} of ${SLOTS} plants · each plant is 10% of the goal${gardener.row===h.gi?' · the gardener is working here':''}`;
  return `${head(tank?'Safety net':'Savings goal')}<h2>${esc(g.name)}</h2><p class="where">${where}</p>
  <div class="big"><b>${fmt(v)}</b><span class="pill ${met?'ok':'over'}">${met?(v>g.target?fmt(v-g.target)+' above target':'Target met'):fmt(g.target-v)+' short of target'}</span></div>
  <div class="meter ${tank?'water':''}"><i style="width:${g.goal?Math.min(100,bal/g.goal*100):0}%"></i></div>
  <p class="sub">${fmt(bal)} saved of ${fmt(g.goal)} · target ${fmt(g.target)} a month</p>
- ${histHTML(g.a,month)}<p class="note">${left?(mo?`At ${fmt(g.target)} a month the ${tank?'tank fills':'goal is reached'} in about ${mo} month${mo===1?'':'s'}.`:'Set a monthly target to see when you’ll get there.'):'Goal reached. Time to pick the next one.'} ${tank?'Every deposit raises the water line on the tower’s gauge.':`Saving the monthly target plants ${FULL} seeds; extra fills the row.`}</p>`}
+ ${histHTML(g.a,month)}<p class="note">${left?(mo?`At ${fmt(g.target)} a month the ${tank?'tank fills':'goal is reached'} in about ${mo} month${mo===1?'':'s'}.`:'Set a monthly target to see when you’ll get there.'):'Goal reached. Time to pick the next one.'} ${tank?'Every deposit raises the water line on the tower’s gauge.':'A new plant sprouts each time the balance passes the next 10% of the goal.'}</p>`}
 function segments(){const inc=S.income[month]||0;
  const items=S.bills.map(b=>({id:b.id,name:b.name,v:b.a[month],over:isOver(b)?b.a[month]-b.budget:0})).sort((a,b)=>b.v-a.v).map((x,i)=>Object.assign(x,{c:PAL[i%PAL.length]}));
  const sav=[{id:'tank',name:S.tank.name,v:S.tank.a[month],c:'#4f9fe0'},...S.goals.map((g,i)=>({id:'goal'+i,name:g.name,v:g.a[month],c:GOAL_LOOK[i].color}))];
  const used=[...items,...sav].reduce((s,x)=>s+x.v,0);return {inc,items,sav,used,left:inc-used}}
+function vPile(){const st=monthStats(month),sm=k=>st.tx.filter(x=>x.k===k).reduce((s,x)=>s+x.amt,0),up=Array.isArray(S.tx[month])&&S.tx[month].length;
+ return `${head('Checking account')}<h2>Woodpile &amp; stove</h2><p class="where">Each log is ${fmt(unit)}. Paychecks stack wood; every purchase goes in the stove.</p>
+ <div class="big"><b>${st.end<0?'−':''}${fmt(Math.abs(st.end))}</b><span class="pill ${st.end<0?'over':'ok'}">at the end of ${MONTHS[month]}</span></div>
+ <div class="legend" style="margin-top:12px">${[['Opening balance',st.open],['Paychecks &amp; deposits',sm('in')],['Spent',-sm('out')],['Moved to savings',-sm('save')]].map(([l,v])=>`<div class="lg" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><span>${l}</span><b>${v<0?'−':''}${fmt(Math.abs(v))}</b></div>`).join('')}</div>
+ <p class="note">${up?`Playing ${S.tx[month].length} uploaded transactions.`:'Playing sample transactions built from this month’s budget. Upload your bank export in Budget → Upload to watch your real month.'}</p>
+ <div class="actions"><button class="btn sm" data-act="play">▶ Play ${MONTHS[month]}</button></div>`}
 function vBudget(){const tabs=['overview','edit','upload'].map(t=>`<button type="button" data-tab="${t}" aria-pressed="${budgetTab===t}">${t[0].toUpperCase()+t.slice(1)}</button>`).join('');
  let body='';
  if(budgetTab==='overview'){const {inc,items,sav,used,left}=segments(),base=Math.max(inc,used)||1;
@@ -584,10 +717,11 @@ function vBudget(){const tabs=['overview','edit','upload'].map(t=>`<button type=
    <label class="f">Saved<input type="number" inputmode="decimal" data-ed="gsaved" data-g="${i}" value="${g.a[month]}"></label><span></span>
    <label class="f wide">Goal total<input type="number" inputmode="decimal" data-ed="ggoal" data-g="${i}" value="${g.goal}"></label></div>`).join('')}
   <div class="actions"><button class="btn sm danger" data-act="reset">Reset to sample budget</button></div>`}
- else{body=`<p class="sub" style="margin-top:12px">Upload a CSV from your spreadsheet or bank export, or a JSON file. Bills are placed in matching objects automatically (groceries in the fridge, pets in the doghouse, and so on). This replaces the current bills.</p>
+ else{body=`<p class="sub" style="margin-top:12px"><b>Bank transactions</b> (date, description, amount): the month plays back day by day and each purchase lands on a matching object (Safeway → fridge, Shell → gas can, Netflix → TV). <b>A budget</b> (name, category, budget, spent) replaces your bills instead. CSV or JSON.</p>
   <label class="drop" id="drop" style="margin-top:12px"><b style="color:var(--ink)">Choose a file</b><span>or drop it here · .csv or .json</span><input type="file" id="file" accept=".csv,.json,text/csv,application/json" style="position:absolute;opacity:0;width:1px;height:1px"></label>
   ${uploadMsg?`<p class="msg">${uploadMsg}</p>`:''}
-  <h3>CSV format</h3><p class="sub">Columns: <b>name, category, budget, spent</b>. Add a row named “Take-home pay” for income, and rows with category “Savings” for the water tower (“Emergency fund”) and the four garden rows. Here’s your current budget in that format:</p>
+  <p class="sub" style="margin-top:10px">Transactions look like <code>2026-11-03,SAFEWAY #1542,-84.12</code>: deposits positive, spending negative. Separate debit and credit columns work too, and transfers mentioning savings or a goal’s name fill that goal.</p>
+  <h3>Budget CSV format</h3><p class="sub">Columns: <b>name, category, budget, spent</b>. Add a row named “Take-home pay” for income, and rows with category “Savings” for the water tower (“Emergency fund”) and the four garden rows. Here’s your current budget in that format:</p>
   <textarea id="tpl" readonly aria-label="Current budget as CSV">${esc(toCSV())}</textarea>
   <div class="actions"><button class="btn sm ghost" data-act="copyCsv">Copy current budget as CSV</button></div>`}
  return `${head(MONTHS[month]+' 2026')}<h2>Budget</h2><div class="tabs" role="tablist">${tabs}</div>${body}`}
@@ -596,6 +730,7 @@ function render(){if(!view)return;let html='';
  else if(view.t==='spot'){const b=billAt(view.id);if(b){view={t:'bill',id:b.id};return render()}html=vSpot(SPOTS[view.id])}
  else if(view.t==='goal')html=vGoal(byId[view.id]);
  else if(view.t==='budget')html=vBudget();
+ else if(view.t==='pile')html=vPile();
  const st=sheet.scrollTop;sheet.innerHTML=html;sheet.classList.toggle('wide',view.t==='budget');if(view.keep)sheet.scrollTop=st;else sheet.scrollTop=0;view.keep=false;
  sheet.classList.add('open');document.body.classList.add('sheet-open');
  const f=document.getElementById('file');if(f){f.addEventListener('change',()=>f.files[0]&&readFile(f.files[0]));const d=document.getElementById('drop');
@@ -604,7 +739,7 @@ function render(){if(!view)return;let html='';
 function open(v){view=v;render()}
 function close(){sheet.classList.remove('open');document.body.classList.remove('sheet-open');view=null;selected=null;flyTo(null)}
 function select(id){const h=byId[id];if(!h)return;selected=h;
- if(h.kind==='spot'){const b=billAt(id);open(b?{t:'bill',id:b.id}:{t:'spot',id})}else open({t:'goal',id});flyTo(h)}
+ if(h.kind==='spot'){const b=billAt(id);open(b?{t:'bill',id:b.id}:{t:'spot',id})}else if(h.kind==='pile')open({t:'pile'});else open({t:'goal',id});flyTo(h)}
 function pick(id){if(byId[id])return select(id);const b=billById(id);if(!b)return;if(b.spot&&SPOTS[b.spot])select(b.spot);else{selected=null;open({t:'bill',id})}}
 function assign(b,sid){if(sid){const other=billAt(sid);if(other&&other!==b)other.spot=null}b.spot=sid||null}
 
@@ -613,6 +748,7 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
  if(t.dataset.pick)return pick(t.dataset.pick);
  const a=t.dataset.act,v=id=>document.getElementById(id);
  if(a==='close')return close();
+ if(a==='play')return startAnim();
  if(a==='saveBill'){const b=billById(t.dataset.id);b.name=v('e-name').value.trim()||b.name;b.budget=num(v('e-budget').value);b.a[month]=num(v('e-spent').value);b.cat=v('e-cat').value;assign(b,v('e-spot').value||null);save();applyMonth(false);
   if(b.spot){selected=SPOTS[b.spot];flyTo(selected)}else selected=null;view.keep=true;render()}
  if(a==='delBill'){S.bills=S.bills.filter(b=>b.id!==t.dataset.id);save();applyMonth(false);close()}
@@ -637,8 +773,8 @@ sheet.addEventListener('change',e=>{const el=e.target,ed=el.dataset.ed;if(!ed)re
  if(ed==='gsaved')G.a[month]=num(el.value);
  if(ed==='ggoal')G.goal=num(el.value);
  save();applyMonth(false)});
-document.getElementById('budgetBtn').addEventListener('click',()=>{selected=null;flyTo(null);budgetTab='overview';open({t:'budget'})});
-addEventListener('keydown',e=>{if(e.target.matches&&e.target.matches('input,select,textarea'))return;if(e.key==='Escape')close();if(e.key==='ArrowLeft'&&month>0){month--;applyMonth()}if(e.key==='ArrowRight'&&month<2){month++;applyMonth()}});
+document.getElementById('budgetBtn').addEventListener('click',()=>{if(anim)stopAnim();selected=null;flyTo(null);budgetTab='overview';open({t:'budget'})});
+addEventListener('keydown',e=>{if(e.target.matches&&e.target.matches('input,select,textarea,button'))return;if(e.key===' '&&anim&&!anim.done){e.preventDefault();anim.paused=!anim.paused;updatePlaybar();return}if(e.key==='Escape'){if(view)close();else if(anim)stopAnim()}if(e.key==='ArrowLeft'&&month>0){if(anim)stopAnim();month--;applyMonth()}if(e.key==='ArrowRight'&&month<2){if(anim)stopAnim();month++;applyMonth()}});
 
 /* ---------- Import / export ---------- */
 function toCSV(){const q=s=>/[",\n]/.test(s)?`"${String(s).replace(/"/g,'""')}"`:s;
@@ -658,6 +794,44 @@ function autoPlace(list,taken=new Set()){
  for(const b of list){b.spot=null;for(const [re,sid] of KEYWORDS){if(re.test(b.name+' '+b.cat)&&!taken.has(sid)){b.spot=sid;taken.add(sid);break}}}
  const free=Object.keys(SPOTS).filter(s=>!taken.has(s));for(const b of list)if(!b.spot&&free.length)b.spot=free.shift()}
 function readFile(file){const r=new FileReader();r.onload=()=>{try{importText(String(r.result),file.name)}catch(err){uploadMsg='That file couldn’t be read. Check that it’s a CSV or JSON file with a name and an amount on each row.';render()}};r.readAsText(file)}
+function parseDay(s){s=String(s||'').trim();let m=/^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);if(m)return{mo:+m[2],d:+m[3]};m=/^(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](\d{2,4}))?$/.exec(s);if(m)return{mo:+m[1],d:+m[2]};
+ if(/[a-z]/i.test(s)&&/\d/.test(s)){const t=Date.parse(s);if(!isNaN(t)){const D=new Date(t);return{mo:D.getMonth()+1,d:D.getDate()}}}return null}
+const MERCHANTS=[[/safeway|costco|trader joe|fred meyer|winco|kroger|grocer|albertsons|whole foods|aldi|market of choice|newport ave/i,'fridge'],[/shell|chevron|exxon|arco|texaco|fuel|gas station|\bbp\b|\b76\b|space age/i,'gascan'],
+ [/netflix|hulu|disney|spotify|youtube|paramount|peacock|apple\.com\/bill|hbo/i,'tv'],[/comcast|xfinity|spectrum|bend broadband|\btds\b|internet|starlink/i,'router'],[/verizon|t-mobile|at&t|mint mobile|visible|cricket/i,'phone'],
+ [/pacific power|pg&e|\bpge\b|electric|edison|power co/i,'lamp'],[/cascade natural|nw natural|natural gas/i,'stove'],[/city of|water|sewer|utility billing|republic services|waste/i,'sink'],
+ [/mortgage|loan serv|rocket|mr\.? cooper|\brent\b/i,'mailbox'],[/geico|progressive|state farm|allstate|farmers ins|usaa/i,'car'],[/blue cross|kaiser|moda|pacificsource|health|pharmacy|cvs|walgreens|clinic|dental/i,'medcab'],
+ [/starbucks|dutch bros|coffee|cafe|espresso/i,'coffee'],[/petco|petsmart|\bvet\b|veterinar|chewy/i,'doghouse'],[/restaurant|pizza|taco|burger|mcdonald|chipotle|doordash|uber ?eats|grubhub|subway|brewing|diner/i,'grill'],
+ [/home depot|lowe'?s|ace hardware|hardware|habitat/i,'shed'],[/target|amazon|dollar|bi-mart|household/i,'basket'],[/gym|fitness|planet fit|ymca|yoga|crossfit/i,'yoga'],[/bike|cycle|cyclery/i,'bike'],
+ [/daycare|childcare|preschool/i,'crib'],[/school|soccer|sports|league|lessons|swim/i,'toychest'],[/book|movie|theater|cinema|steam|game|barnes/i,'bookshelf']];
+function importTx(rows,hasHead,h){const col=(re,d)=>hasHead?h.findIndex(x=>re.test(x)):d;
+ const di=col(/date|posted/,0),de=col(/desc|payee|merchant|memo|details|^name$/,1),am=col(/amount|amt/,2),dr=col(/debit|withdraw/,-1),cr=col(/credit|deposit/,-1),ca=col(/categ/,-1);
+ const raw=[],months={};
+ for(const r of rows.slice(hasHead?1:0)){const dd=parseDay(r[di]);if(!dd)continue;let v=NaN;
+  if(am>=0&&r[am]!=null&&r[am]!==''){let t=String(r[am]).replace(/[$,\s]/g,'');if(/^\(.*\)$/.test(t))t='-'+t.slice(1,-1);v=parseFloat(t)}
+  else if(dr>=0||cr>=0)v=(cr>=0?num(r[cr]):0)-(dr>=0?num(r[dr]):0);
+  if(!isFinite(v)||v===0)continue;months[dd.mo]=(months[dd.mo]||0)+1;raw.push({d:dd.d,mo:dd.mo,desc:String((de>=0&&r[de])||'Transaction').slice(0,60),cat:ca>=0?String(r[ca]||''):'',v})}
+ if(!raw.length)throw 0;
+ const topMo=+Object.keys(months).sort((x,y)=>months[y]-months[x])[0],idx={9:0,10:1,11:2}[topMo],m=idx!=null?idx:month;
+ const created=[],newBill=(name,cat,sp)=>{const b={id:uid(),name:String(name).slice(0,60),cat:CATS.includes(cat)?cat:'Other',budget:0,a:[0,0,0],due:'',note:'Added from your bank upload.',spot:null};S.bills.push(b);if(sp&&SPOTS[sp]&&!billAt(sp))b.spot=sp;created.push(b);return b};
+ const freeSpot=()=>Object.keys(SPOTS).find(x=>!billAt(x)&&!SPOTS[x].suggest)||Object.keys(SPOTS).find(x=>!billAt(x));
+ const tx=[];
+ for(const x of raw.filter(r=>r.mo===topMo)){const text=(x.desc+' '+x.cat),lo=text.toLowerCase();
+  if(x.v>0){tx.push({d:x.d,desc:/payroll|salary|paycheck|direct dep/i.test(x.desc)?'Paycheck':x.desc,amt:x.v,k:'in'});continue}
+  const amt=-x.v;
+  if(/transfer|saving/i.test(text)){let goal=null;S.goals.forEach((g,i)=>{if(!goal&&g.name.toLowerCase().split(/\W+/).some(w=>w.length>3&&lo.includes(w)))goal='goal'+i});
+   if(!goal&&/emergency|rainy|safety|saving/i.test(text))goal='tank';if(goal){tx.push({d:x.d,desc:x.desc,amt,k:'save',goal});continue}}
+  let b=x.cat?S.bills.find(y=>y.name.toLowerCase()===x.cat.toLowerCase()):null;
+  if(!b)for(const [re,sid] of MERCHANTS){if(re.test(text)){b=billAt(sid)||newBill(SPOTS[sid].suggest||(x.cat&&!CATS.includes(x.cat)?x.cat:SPOTS[sid].label),SPOTS[sid].cat||(CATS.includes(x.cat)?x.cat:'Other'),sid);break}}
+  if(!b)b=S.bills.find(y=>y.name.toLowerCase().split(/\W+/).some(w=>w.length>3&&lo.includes(w)));
+  if(!b)b=S.bills.find(y=>y.name==='Everything else')||newBill('Everything else','Other',freeSpot());
+  tx.push({d:x.d,desc:x.desc,amt,k:'out',bill:b.id})}
+ S.bills.forEach(b=>b.a[m]=0);S.tank.a[m]=0;S.goals.forEach(g=>g.a[m]=0);let inc=0;
+ tx.forEach(t=>{t.amt=Math.round(t.amt*100)/100;if(t.k==='in')inc+=t.amt;else if(t.k==='out')billById(t.bill).a[m]+=t.amt;else(t.goal==='tank'?S.tank:S.goals[+t.goal.slice(4)]).a[m]+=t.amt});
+ S.bills.forEach(b=>b.a[m]=Math.round(b.a[m]*100)/100);created.forEach(b=>b.budget=Math.round(b.a[m]));if(inc>0)S.income[m]=Math.round(inc);
+ S.tx[m]=tx.sort((x,y)=>x.d-y.d);month=m;save(true);applyMonth(false);
+ const c=k=>tx.filter(t=>t.k===k).length;
+ uploadMsg=`Loaded <b>${tx.length} transactions</b> into ${MONTHS[m]}: ${c('in')} deposits, ${c('out')} purchases, ${c('save')} savings transfers.${created.length?' New spots: '+created.map(b=>esc(b.name)).join(', ')+'.':''} Playing the month…`;
+ budgetTab='upload';render();setTimeout(()=>{if(view&&view.t==='budget'&&budgetTab==='upload')startAnim()},1500)}
 function sanG(g){return{name:String(g.name||'Goal').slice(0,40),goal:num(g.goal),start:num(g.start),target:num(g.target),a:Array.isArray(g.a)&&g.a.length===3?g.a.map(num):[0,0,0]}}
 function importText(text,name){let n=0,extra='';
  if(/\.json$/i.test(name)||/^\s*[\[{]/.test(text)){const d=JSON.parse(text);const arr=Array.isArray(d)?d:d.bills;if(!Array.isArray(arr))throw 0;
@@ -665,7 +839,8 @@ function importText(text,name){let n=0,extra='';
    a:Array.isArray(x.a)&&x.a.length===3?x.a.map(num):[0,0,0].map(()=>num(x.spent!=null?x.spent:x.budget)),due:String(x.due||'').slice(0,30),note:String(x.note||'').slice(0,200),spot:SPOTS[x.spot]?x.spot:null}));
   if(!Array.isArray(d)){if(Array.isArray(d.income)&&d.income.length===3)S.income=d.income.map(num);if(d.tank)Object.assign(S.tank,sanG(d.tank));if(Array.isArray(d.goals))d.goals.slice(0,4).forEach((g,i)=>Object.assign(S.goals[i],sanG(g)))}
   const taken=new Set(bills.filter(b=>b.spot).map(b=>b.spot));autoPlace(bills.filter(b=>!b.spot),taken);S.bills=bills;n=bills.length}
- else{const rows=parseCSV(text);if(!rows.length)throw 0;const h=rows[0].map(s=>s.toLowerCase());const hasHead=h.some(s=>/name|item|category|budget|amount|spent|actual/.test(s));
+ else{const rows=parseCSV(text);if(!rows.length)throw 0;const h=rows[0].map(s=>s.toLowerCase());const hasHead=h.some(s=>/name|item|category|budget|amount|spent|actual|date|desc/.test(s));
+  if((hasHead&&h.some(s=>/date|posted/.test(s)))||(!hasHead&&parseDay(rows[0][0])))return importTx(rows,hasHead,h);
   const col=(re,d)=>hasHead?h.findIndex(s=>re.test(s)):d;
   const ci={name:col(/name|item|bill|expense|description|payee/,0),cat:col(/categ|group|type/,-1),budget:col(/budget|planned|amount|limit/,1),spent:col(/spent|actual|paid/,2)};if(ci.name<0)ci.name=0;
   const bills=[];let gi=0;for(const r of rows.slice(hasHead?1:0)){const nm=(r[ci.name]||'').slice(0,60);if(!nm)continue;const cat=ci.cat>=0?(r[ci.cat]||''):'';const bud=ci.budget>=0?num(r[ci.budget]):0;
@@ -712,15 +887,17 @@ function resize(){const w=innerWidth,h=innerHeight,a=w/h;renderer.setSize(w,h,fa
 addEventListener('resize',resize);resize();zoom=zoomGoal=baseZoom;
 
 function tickGardener(dt,t){const G=gardener,g=G.g;
- if(G.state==='walk'&&G.path.length){const tgt=G.path[0],dx=tgt.x-g.position.x,dz=tgt.z-g.position.z,d=Math.hypot(dx,dz);
-  if(d<0.05){G.path.shift();if(!G.path.length){G.state=G.row>=0?'water':'idle';G.timer=2.5+rnd()*2}}
-  else{const st=Math.min(d,1.7*dt);g.position.x+=dx/d*st;g.position.z+=dz/d*st;G.face=Math.atan2(dx,dz)}
-  const sw=reduce?0:Math.sin(t*9)*0.55;G.legL.rotation.x=sw;G.legR.rotation.x=-sw;G.armL.rotation.x=-sw*0.8;G.armR.rotation.x=sw*0.3-0.4;G.can.rotation.x=0;g.position.y=0.25+(reduce?0:Math.abs(Math.sin(t*9))*0.05)}
+ if(G.state==='walk'){if(G.path.length){const tgt=G.path[0],dx=tgt.x-g.position.x,dz=tgt.z-g.position.z,d=Math.hypot(dx,dz);
+   if(d<0.05)G.path.shift();else{const st=Math.min(d,(anim&&!anim.done?(anim.phase==='intro'?5:2.8):1.7)*dt);g.position.x+=dx/d*st;g.position.z+=dz/d*st;G.face=Math.atan2(dx,dz)}}
+  const sw=reduce?0:Math.sin(t*9)*0.55;G.legL.rotation.x=sw;G.legR.rotation.x=-sw;G.armL.rotation.x=-sw*0.8;G.armR.rotation.x=sw*0.3-0.4;G.can.rotation.x=0;g.position.y=0.25+(reduce?0:Math.abs(Math.sin(t*9))*0.05);
+  if(!G.path.length){G.state=G.after||'idle';G.timer=G.state==='work'?2.8:2.5+rnd()*2;if(G.onArrive){const f=G.onArrive;G.onArrive=null;f()}}}
  else{G.legL.rotation.x=G.legR.rotation.x=0;g.position.y=0.25;
-  if(G.state==='water'){G.face=Math.PI/2;G.armR.rotation.x=-1.1;G.armL.rotation.x=-0.2;G.can.rotation.x=0.9+(reduce?0:Math.sin(t*3)*0.08);
+  if(G.state==='water'||G.state==='work'){G.face=G.faceTo!=null?G.faceTo:Math.PI/2;G.armR.rotation.x=-1.1;G.armL.rotation.x=-0.2;G.can.rotation.x=0.9+(reduce?0:Math.sin(t*3)*0.08);
    G.tip.getWorldPosition(tipW);world.worldToLocal(tipW);
-   if(!reduce&&Math.random()<dt*14){const d=drops.find(x=>x.life<=0);if(d){d.m.position.copy(tipW);d.v.set(0.6+Math.random()*0.3,0.3,(Math.random()-0.5)*0.3);d.life=1;d.m.visible=true}}
-   G.timer-=dt;if(G.timer<=0){G.path=[new THREE.Vector3(g.position.x,0,pickSlotZ(G.row))];G.state='walk'}}
+   if(!reduce&&Math.random()<dt*14){const d=drops.find(x=>x.life<=0);if(d){d.m.position.copy(tipW);d.v.set(Math.sin(G.face)*0.7,0.3,Math.cos(G.face)*0.7);d.life=1;d.m.visible=true}}
+   G.timer-=dt;if(G.timer<=0){if(G.state==='work'){G.state='wait';const f=G.onDone;G.onDone=null;f&&f()}else if(G.row>=0){route(V(g.position.x,pickSlotZ(G.row)));G.after='water'}else G.state='idle'}}
+  else if(G.state==='fire'){G.face=Math.atan2(1.9-g.position.x,-2.5-g.position.z);G.can.rotation.x=0;G.armL.rotation.x=-0.3;
+   if(G.toss>0){G.toss=Math.max(0,G.toss-dt);G.armR.rotation.x=-2.4*Math.sin((1-G.toss/0.35)*Math.PI)}else G.armR.rotation.x=-0.25}
   else{G.face=Math.PI/4;G.armR.rotation.x=-0.3;G.armL.rotation.x=0;G.can.rotation.x=0}}
  let df=G.face-g.rotation.y;df=Math.atan2(Math.sin(df),Math.cos(df));g.rotation.y+=df*(1-Math.exp(-dt*8));
  for(const d of drops){if(d.life<=0)continue;d.life-=dt*1.6;d.v.y-=9*dt;d.m.position.addScaledVector(d.v,dt);if(d.life<=0||d.m.position.y<0.45){d.life=0;d.m.visible=false}}}
@@ -729,16 +906,18 @@ function tick(){const dt=Math.min(clock.getDelta(),0.05),t=clock.elapsedTime,k=1
  focus.lerp(focusGoal,k);zoom+=(zoomGoal-zoom)*k;cam.position.copy(focus).add(OFF);cam.lookAt(focus);cam.zoom=zoom;cam.updateProjectionMatrix();
  for(const h of hot){const sel=selected===h,hov=hovered===h;
   if(h.kind==='goal'){h.g.rotation.z=reduce?0:Math.sin(t*1.3+h.phase)*0.05;const gs=sel?1.2:1;h.g.scale.setScalar(h.g.scale.x+(gs-h.g.scale.x)*k);continue}
-  if(h.kind==='tank')continue;
-  h.g.scale.setScalar(h.base*(sel?1.04:1));
-  for(const m of h.mats){m.emissiveIntensity=sel?0.28:hov?0.14:0;if(sel||hov)m.emissive.set('#b9a7ea')}
-  if(h.ring){if(h.status==='over'){const s=reduce?0.6:(Math.sin(t*4.5+h.phase)+1)/2;h.ring.visible=true;h.ring.material.color.set('#f0707a');h.ring.material.opacity=sel?0.95:0.3+0.55*s;h.ring.scale.setScalar(1+0.12*s)}
+  if(h.kind==='tank'||h.kind==='pile')continue;
+  const pu=h.pulse>0?Math.sin(h.pulse*Math.PI):0;if(h.pulse>0)h.pulse=Math.max(0,h.pulse-dt*1.3);
+  h.g.scale.setScalar(h.base*(1+(sel?0.04:0)+pu*0.14));
+  for(const m of h.mats){m.emissiveIntensity=pu>0?pu*0.55:sel?0.28:hov?0.14:0;if(pu>0)m.emissive.set(h.status==='over'?'#f0707a':'#ffbe5c');else if(sel||hov)m.emissive.set('#b9a7ea')}
+  if(h.ring){if(pu>0){h.ring.visible=true;h.ring.material.color.set(h.status==='over'?'#f0707a':'#ffbe5c');h.ring.material.opacity=0.9*pu;h.ring.scale.setScalar(1+0.35*pu)}
+   else if(h.status==='over'){const s=reduce?0.6:(Math.sin(t*4.5+h.phase)+1)/2;h.ring.visible=true;h.ring.material.color.set('#f0707a');h.ring.material.opacity=sel?0.95:0.3+0.55*s;h.ring.scale.setScalar(1+0.12*s)}
    else{h.ring.visible=sel;h.ring.material.color.set('#b9a7ea');h.ring.material.opacity=0.85;h.ring.scale.setScalar(1)}}
   if(h.badge.visible){h.badge.position.y=h.badge.userData.y;h.badge.scale.setScalar(h.status==='over'?0.9:sel?0.85:0.62)}}
- const lv=S.tank.goal?clamp(balance(S.tank,month)/S.tank.goal,0,1):0;tankLevel+=(lv-tankLevel)*(1-Math.exp(-dt*2.5));gauge.scale.y=Math.max(0.01,2.8*tankLevel);gauge.position.y=-1.4+1.4*tankLevel;
+ const tb=anim&&!anim.done&&!anim.reached.has('tank')?startBal(S.tank,month):balance(S.tank,month);const lv=S.tank.goal?clamp(tb/S.tank.goal,0,1):0;tankLevel+=(lv-tankLevel)*(1-Math.exp(-dt*2.5));gauge.scale.y=Math.max(0.01,2.8*tankLevel);gauge.position.y=-1.4+1.4*tankLevel;
  for(const s of slots){if(s.delay>0){s.delay-=dt;continue}s.cur+=(s.target-s.cur)*(1-Math.exp(-dt*(s.target?6:9)));
   const v=s.target?Math.min(1,s.cur*1.08+Math.sin(s.cur*Math.PI)*0.12):s.cur;s.g.scale.setScalar(Math.max(0.001,v));s.g.visible=v>0.01;s.g.rotation.z=reduce?0:Math.sin(t*1.6+s.phase)*0.05}
- tickGardener(dt,t);
+ tickGardener(dt,t);tickAnim(dt);tickPile(dt);tickFire(dt,t);tickFliers(dt);
  routerLed.material.color.set(Math.sin(t*6)>0?'#6be3a8':'#2f9e6c');
  for(const f of flies){const a=reduce?f.ph:t*0.5+f.ph;f.g.position.set(f.x+Math.cos(a)*1.6,2.6+Math.sin(t*1.7+f.ph)*0.4,f.z+Math.sin(a*1.3)*1.4);f.g.rotation.y=-a;const fl=reduce?0.4:Math.sin(t*14+f.ph)*0.9;f.p1.rotation.z=fl;f.p2.rotation.z=-fl}
  renderer.render(scene,cam);
@@ -748,6 +927,7 @@ applyMonth();
 for(const s of slots){s.cur=s.target;s.delay=0}
 tankLevel=S.tank.goal?clamp(balance(S.tank,month)/S.tank.goal,0,1):0;
 {const r=activeRow();gardener.row=r;if(r>=0){gardener.g.position.set(ROWX[r]-1.55,0.25,pickSlotZ(r));gardener.path=[];gardener.state='water';gardener.timer=2}}
+restPile();pileShown=pileTarget;logs.forEach((l,i)=>l.g.visible=i<pileShown);
 if(document.fonts)document.fonts.ready.then(()=>{for(const k in COINS){coinDraw(coin[k].c.getContext('2d'),...COINS[k]);coin[k].t.needsUpdate=true}S.goals.forEach((g,i)=>packetDraw(i,month));plaqueDraw(month)});
 
 tick();
