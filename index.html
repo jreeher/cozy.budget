@@ -113,9 +113,11 @@ body.playing .bar{opacity:0;pointer-events:none}body.playing .bar>*{pointer-even
 .play .bal b.neg{color:var(--coral)}
 .play .pb{width:44px;height:44px;border:0;border-radius:50%;background:var(--ink);color:#fff;font:600 16px/1 Fredoka,sans-serif;cursor:pointer;flex:none}
 .play .pb.ghost{background:#f2edf8;color:var(--ink)}
+.play .pb.off{opacity:.45;text-decoration:line-through}
+.erow .wide.grid2{grid-column:1 / -1}
 .play .cap{position:absolute;left:12px;right:12px;bottom:100%;margin-bottom:8px;text-align:center;font-size:14px;font-weight:500;color:var(--ink);text-shadow:0 0 10px #fff,0 0 4px #fff}
 #toasts{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:3}
-.toast{position:absolute;transform:translate(-50%,-100%);font-weight:600;font-size:14px;padding:4px 10px;border-radius:999px;background:#fffaf7;box-shadow:0 4px 14px #5a3f8a2e;white-space:nowrap;animation:rise 2s ease-out forwards}
+.toast{position:absolute;transform:translate(-50%,-100%);font-weight:600;font-size:14px;padding:4px 10px;border-radius:999px;background:#fffaf7;box-shadow:0 4px 14px #5a3f8a2e;white-space:nowrap;animation:rise 2.6s ease-out forwards}
 .toast.in{color:#1f7d5c}.toast.out{color:#b23642}.toast.save{color:#2f6fae}
 @keyframes rise{0%{opacity:0;margin-top:6px}12%{opacity:1}78%{opacity:1}100%{opacity:0;margin-top:-36px}}
 @media(max-width:600px){.play{gap:8px;padding:10px}.play .day{font-size:17px;min-width:62px}.play .bal{display:none}.toast{font-size:12px}}
@@ -150,7 +152,7 @@ body.playing .bar{opacity:0;pointer-events:none}body.playing .bar>*{pointer-even
 
 <aside class="sheet" id="sheet" aria-live="polite"></aside>
 <div id="toasts" aria-hidden="true"></div>
-<div class="play" id="play" role="region" aria-label="Month playback"><span class="cap" id="pCap" aria-live="polite"></span><span class="day" id="pDay">Nov 1</span><div class="track2"><i id="pBar"></i></div><span class="bal">Checking<b id="pBal">$0</b></span><button class="pb ghost" id="pToggle" aria-label="Pause">❚❚</button><button class="pb" id="pSkip" aria-label="Skip to the end">»</button></div>
+<div class="play" id="play" role="region" aria-label="Month playback"><span class="cap" id="pCap" aria-live="polite"></span><span class="day" id="pDay">Nov 1</span><div class="track2"><i id="pBar"></i></div><span class="bal">Checking<b id="pBal">$0</b></span><button class="pb ghost" id="pSound" aria-pressed="true" aria-label="Music">♪</button><button class="pb ghost" id="pToggle" aria-label="Pause">❚❚</button><button class="pb" id="pSkip" aria-label="Skip to the end">»</button></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -178,12 +180,12 @@ const SAMPLE={
   {id:'household',name:'Household goods',cat:'Home',budget:120,a:[134,108,126],due:'as needed',note:'Soap, paper towels, diapers and the rest.',spot:'basket'},
   {id:'fun',name:'Fun money',cat:'Wants',budget:200,a:[185,212,160],due:'monthly',note:'Books, dates and little treats.',spot:'bookshelf'}
  ],
- tank:{name:'Emergency fund',goal:10000,start:3800,target:400,a:[400,250,450]},
+ tank:{name:'Emergency fund',goal:10000,start:3800,target:400,a:[400,250,450],account:'Emergency savings ••4821'},
  goals:[
-  {name:'Next car',goal:8000,start:2100,target:200,a:[200,100,200]},
-  {name:'Camping trip',goal:1800,start:600,target:150,a:[150,150,200]},
-  {name:'Holiday gifts',goal:600,start:300,target:100,a:[100,100,50]},
-  {name:'Kids’ bikes',goal:400,start:80,target:40,a:[40,60,40]}
+  {name:'Next car',goal:8000,start:2100,target:200,a:[200,100,200],account:'Credit union savings ••1190'},
+  {name:'Camping trip',goal:1800,start:600,target:150,a:[150,150,200],account:'Ally HYSA ••7735'},
+  {name:'Holiday gifts',goal:600,start:300,target:100,a:[100,100,50],account:'Christmas club ••2208'},
+  {name:'Kids’ bikes',goal:400,start:80,target:40,a:[40,60,40],account:'Kids savings ••5512'}
  ]};
 const GOAL_LOOK=[
  {icon:'car',plant:'cabbage',color:'#a6cff2',ink:'#1d456c'},
@@ -193,7 +195,7 @@ const GOAL_LOOK=[
 const KEY='budget-house-v3';
 const clone=o=>JSON.parse(JSON.stringify(o));
 let S=clone(SAMPLE),edited=false;
-try{const raw=localStorage.getItem(KEY);if(raw){const v=JSON.parse(raw);if(v&&Array.isArray(v.bills)&&v.tank&&Array.isArray(v.goals)&&v.goals.length===4&&Array.isArray(v.income)){S=v;edited=true}}}catch(e){}
+try{const raw=localStorage.getItem(KEY);if(raw){const v=JSON.parse(raw);if(v&&Array.isArray(v.bills)&&v.tank&&Array.isArray(v.goals)&&v.goals.length<=6&&Array.isArray(v.income)){S=v;edited=true}}}catch(e){}
 if(!S.tx||typeof S.tx!=='object')S.tx={};if(!(S.open0>=0))S.open0=600;
 function save(keepTx){edited=true;if(!keepTx&&S.tx)delete S.tx[month];try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 const SLOTS=10;
@@ -436,14 +438,19 @@ let fireLight,fireGlow,fireHeat=0;const smoke=[];
  fireLight=new THREE.PointLight(0xff9a4a,0.4,7);fireLight.position.set(1.0,1.2,1.0);g.add(fireLight);
  reg(g,'stove2',{kind:'pile'});
  for(let i=0;i<10;i++){const sm=new THREE.Mesh(sph(0.22),new THREE.MeshBasicMaterial({color:'#ebe6f2',transparent:true,opacity:0,depthWrite:false}));sm.visible=false;world.add(sm);smoke.push({m:sm,life:0})}}
-const STOVE_MOUTH=new THREE.Vector3(2.4,1.3,-2.0),CHIMNEY=new THREE.Vector3(1.7,4.7,-2.7);
+const STOVE_MOUTH=new THREE.Vector3(2.4,1.3,-2.0),CHIMNEY=new THREE.Vector3(1.7,4.7,-2.7),BLOCK=new THREE.Vector3(3.62,0.95,-3.55);
+let stumpAxe;
+{const g=grp(world,3.62,0.25,-3.55);mesh(g,cyl(.42,.48,.6,16),'#9a6b47',0,0.3,0);mesh(g,cyl(.4,.4,.02,16),'#f2d4a8',0,0.61,0);mesh(g,new THREE.TorusGeometry(.22,.015,6,20),'#d9a676',0,0.625,0).rotation.x=Math.PI/2;
+ stumpAxe=grp(g,0.05,0.62,0.05,0.5);const hh=mesh(stumpAxe,cyl(.035,.04,.9,8),'#c99c76',0,0.42,0);hh.rotation.z=0.35;box(stumpAxe,0.22,0.24,0.06,'#9aa3b5',-0.02,-0.06,0,0.02);
+ [[0.55,0.25,0.5],[-0.5,0.4,1.9],[0.3,-0.55,2.6]].forEach(([x,z,r])=>{const c=box(g,0.38,0.14,0.16,'#c99766',x,0,z,0.03);c.rotation.y=r})}
 const fliers=[];for(let i=0;i<14;i++){const fm=new THREE.Mesh(cyl(.16,.16,1.25,10),M('#b07a52'));fm.rotation.z=Math.PI/2;fm.visible=false;fm.castShadow=true;world.add(fm);fliers.push({m:fm,t:1,a:new THREE.Vector3(),b:new THREE.Vector3(),dur:.7,onEnd:null})}
-function fly(a,b,dur,onEnd){const f=fliers.find(x=>x.t>=1);if(!f){onEnd&&onEnd();return}f.a.copy(a);f.b.copy(b);f.t=0;f.dur=dur;f.onEnd=onEnd;f.m.visible=true;f.m.position.copy(a)}
+function fly(a,b,dur,onEnd,sc=1){const f=fliers.find(x=>x.t>=1);if(!f){onEnd&&onEnd();return}f.m.scale.setScalar(sc);f.a.copy(a);f.b.copy(b);f.t=0;f.dur=dur;f.onEnd=onEnd;f.m.visible=true;f.m.position.copy(a)}
 function tickFliers(dt){for(const f of fliers){if(f.t>=1)continue;f.t=Math.min(1,f.t+dt/f.dur);f.m.position.lerpVectors(f.a,f.b,f.t);f.m.position.y+=Math.sin(f.t*Math.PI)*2.2;f.m.rotation.x+=dt*9;if(f.t>=1){f.m.visible=false;const cb=f.onEnd;f.onEnd=null;cb&&cb()}}}
-function tickPile(dt){pileTimer-=dt;if(pileTimer<=0){if(pileShown<pileTarget){const l=logs[pileShown++];l.g.visible=true;l.drop=1;pileTimer=anim?0.045:0.012}
-  else if(pileShown>pileTarget&&!(anim&&anim.tq.length)){logs[--pileShown].g.visible=false;pileTimer=anim?0.04:0.012}}
- for(const l of logs)if(l.drop>0){l.drop=Math.max(0,l.drop-dt*2.6);l.g.position.y=l.base.y+l.drop*l.drop*5}}
-function tickFire(dt,t){fireHeat=Math.max(0,fireHeat-dt*0.45);const f=0.5+0.5*Math.sin(t*13)*Math.sin(t*7.3);fireLight.intensity=0.3+fireHeat*1.5+f*0.15;fireGlow.material.color.setRGB(1,0.5+0.3*fireHeat+0.1*f,0.15+0.25*fireHeat);
+function tickPile(dt){pileTimer-=dt;if(pileTimer<=0){if(pileShown<pileTarget){const l=logs[pileShown++];l.vanish=0;l.g.scale.setScalar(1);l.g.visible=true;l.drop=1;pileTimer=anim?0.07:0.012}
+  else if(pileShown>pileTarget&&!(anim&&anim.tq.length)){const l=logs[--pileShown];if(anim)l.vanish=1;else l.g.visible=false;pileTimer=anim?0.05:0.012}}
+ for(const l of logs){if(l.drop>0){l.drop=Math.max(0,l.drop-dt*2.6);l.g.position.y=l.base.y+l.drop*l.drop*5}
+  if(l.vanish>0){l.vanish=Math.max(0,l.vanish-dt*3.5);l.g.scale.setScalar(Math.max(0.001,l.vanish));if(l.vanish<=0){l.g.visible=false;l.g.scale.setScalar(1)}}}}
+function tickFire(dt,t){fireHeat=Math.max(0,fireHeat-dt*0.45);Sound.crackle(fireHeat);const f=0.5+0.5*Math.sin(t*13)*Math.sin(t*7.3);fireLight.intensity=0.3+fireHeat*1.5+f*0.15;fireGlow.material.color.setRGB(1,0.5+0.3*fireHeat+0.1*f,0.15+0.25*fireHeat);
  if(fireHeat>0.12&&!reduce&&Math.random()<dt*7*fireHeat){const p=smoke.find(x=>x.life<=0);if(p){p.life=1;p.m.visible=true;p.m.position.copy(CHIMNEY);p.m.scale.setScalar(0.6)}}
  for(const p of smoke){if(p.life<=0)continue;p.life-=dt*0.45;p.m.position.y+=dt*1.2;p.m.position.x+=dt*0.3;p.m.scale.setScalar(0.6+(1-p.life)*1.5);p.m.material.opacity=Math.max(0,p.life)*0.75;if(p.life<=0)p.m.visible=false}}
 
@@ -479,24 +486,29 @@ function iconDraw(x,kind,cx,cy){x.lineCap='round';x.lineJoin='round';
   x.moveTo(cx+18,cy-14);x.lineTo(cx+34,cy+18);x.moveTo(cx+18,cy-14);x.lineTo(cx+14,cy-28);x.lineTo(cx+28,cy-30);x.stroke();
   x.strokeStyle='#3d3a52';x.lineWidth=7;x.beginPath();x.moveTo(cx-30,cy-26);x.lineTo(cx-12,cy-26);x.stroke()}}
 function iconFor(name,def){const n=name.toLowerCase();if(/car|truck|vehicle|van\b/.test(n))return'car';if(/camp|trip|vacation|travel|tent|holiday trip/.test(n))return'tent';if(/gift|holiday|christmas|birthday|present/.test(n))return'gift';if(/bike|bicycle|cycl/.test(n))return'bike';return /^(car|tent|gift|bike)$/.test(def)&&n===''?def:'jar'}
-function packetDraw(i,m){const gl=S.goals[i],lk=GOAL_LOOK[i],x=lk.tex.c.getContext('2d');x.clearRect(0,0,256,344);
+function packetDraw(i,m){const gl=S.goals[i],lk=rows[i].look,x=lk.tex.c.getContext('2d');x.clearRect(0,0,256,344);
  x.fillStyle='#fffaf3';rrect(x,0,0,256,344,20);x.fill();x.fillStyle=lk.color;rrect(x,10,10,236,324,16);x.fill();
  x.fillStyle='#fffaf3';x.beginPath();x.arc(128,104,74,0,7);x.fill();iconDraw(x,iconFor(gl.name,lk.icon),128,108);
  x.fillStyle=lk.ink;x.textAlign='center';x.textBaseline='alphabetic';let fs=32;do{x.font=`700 ${fs}px Fredoka, sans-serif`;fs-=2}while(x.measureText(gl.name).width>220&&fs>14);x.fillText(gl.name,128,218);
  x.font='600 23px Fredoka, sans-serif';x.fillText(`${fmt(gl.a[m])} in ${MONTHS[m]}`,128,252);
  const bal=balance(gl,m),p=gl.goal>0?Math.min(1,bal/gl.goal):0;x.fillStyle='#ffffffa8';rrect(x,34,270,188,18,9);x.fill();x.fillStyle=lk.ink;rrect(x,34,270,Math.max(18,188*p),18,9);x.fill();
  x.font='500 18px Fredoka, sans-serif';x.fillText(`${fmt(bal)} of ${fmt(gl.goal)}`,128,318);lk.tex.t.needsUpdate=true}
-const ROWX=[5.8,8.9,12.0,15.1],slots=[],SLOTZ=s=>-10+s*1.85;
-GOAL_LOOK.forEach((lk,i)=>{const x=ROWX[i];
- box(world,2.0,0.22,19,'#a8775c',x,0.25,-1.5,0.12);
- for(let s=0;s<SLOTS;s++){const z=SLOTZ(s);const mo=mesh(world,sph(0.32),'#93644a',x,0.47,z);mo.scale.set(1,.32,1);
-  const p=makePlant(lk.plant);p.position.set(x,0.5,z);p.scale.setScalar(0.001);world.add(p);slots.push({g:p,row:i,s,cur:0,target:0,delay:0,phase:rnd()*6})}
- mesh(world,cyl(.07,.07,2.4,8),'#c99c76',x,1.45,10.24);
- const pk=grp(world,x,2.5,10.3);pk.rotation.x=-0.12;
- lk.tex=canvasTex(256,344,()=>{});const side=M('#fffaf3');
- const pm=new THREE.Mesh(new THREE.BoxGeometry(2.0,2.7,0.06),[side,side,side,side,new THREE.MeshStandardMaterial({map:lk.tex.t,roughness:.9}),side]);pm.position.y=0.75;shade(pm);pk.add(pm);pm.userData.keep=true;
- const h=reg(pk,'goal'+i,{kind:'goal'});h.gi=i});
-
+const slots=[],SLOTZ=s=>-10+s*1.85,gardenG=new THREE.Group();world.add(gardenG);let rows=[];
+const PLANTS=['cabbage','sunflower','pine','tulip'],GCOL=[['#a6cff2','#1d456c'],['#b4e09f','#2d5a24'],['#f7b3c8','#7b2346'],['#ffd978','#6e4210'],['#d8c6f4','#4b3a7a'],['#f6c4a0','#7a3d16']];
+const rowX=(i,n)=>n<=4?5.8+3.1*i:5.4+2.1*i;
+function buildGarden(){while(gardenG.children.length)gardenG.remove(gardenG.children[0]);
+ for(let i=hot.length-1;i>=0;i--)if(hot[i].kind==='goal'){delete byId[hot[i].id];hot.splice(i,1)}
+ for(let i=targets.length-1;i>=0;i--){const h=targets[i].userData.hot;if(h&&h.kind==='goal')targets.splice(i,1)}
+ slots.length=0;rows=[];const n=S.goals.length,w=n<=4?2.0:1.5,pw=n<=4?2.0:1.75;
+ S.goals.forEach((gl,i)=>{const x=rowX(i,n),lk={icon:'',plant:PLANTS[i%4],color:GCOL[i%6][0],ink:GCOL[i%6][1]};
+  box(gardenG,w,0.22,19,'#a8775c',x,0.25,-1.5,0.12);
+  for(let k=0;k<SLOTS;k++){const z=SLOTZ(k);const mo=mesh(gardenG,sph(0.32),'#93644a',x,0.47,z);mo.scale.set(1,.32,1);
+   const pl=makePlant(lk.plant);pl.position.set(x,0.5,z);pl.scale.setScalar(0.001);gardenG.add(pl);slots.push({g:pl,row:i,s:k,cur:0,target:0,delay:0,phase:rnd()*6})}
+  mesh(gardenG,cyl(.07,.07,2.4,8),'#c99c76',x,1.45,10.24);
+  const pk=grp(gardenG,x,2.5,10.3);pk.rotation.x=-0.12;lk.tex=canvasTex(256,344,()=>{});const side=M('#fffaf3');
+  const pm=new THREE.Mesh(new THREE.BoxGeometry(pw,pw*1.35,0.06),[side,side,side,side,new THREE.MeshStandardMaterial({map:lk.tex.t,roughness:.9}),side]);pm.position.y=0.75;shade(pm);pk.add(pm);pm.userData.keep=true;
+  const h=reg(pk,'goal'+i,{kind:'goal'});h.gi=i;byId[h.id]=h;rows.push({x,lane:x-(n<=4?1.55:1.05),look:lk})});
+ gardenTargets();snapGarden();S.goals.forEach((g,i)=>packetDraw(i,month))}
 /* ---------- Water tower: the emergency fund ---------- */
 let gauge,tankLevel=0,tankPlaque;
 {const T=grp(world,2.5,0.25,-10.6);const wood='#d9a676',dark='#b88456';const L=6.4;
@@ -526,20 +538,26 @@ function plaqueDraw(m){const x=tankPlaque.c.getContext('2d'),t=S.tank;x.clearRec
  x.fillText(`${fmt(balance(t,m))} of ${fmt(t.goal)}`,256,118);tankPlaque.t.needsUpdate=true}
 
 /* ---------- Gardener ---------- */
-const gardener={g:grp(world,3.4,0.25,5.2),path:[],state:'idle',timer:0,row:-1,face:0};
-{const g=gardener.g,skin='#f2c9a8',over='#8ec5e8',shirt='#fff1c9';
- const legL=grp(g,-0.14,0.75,0),legR=grp(g,0.14,0.75,0);[legL,legR].forEach(l=>{mesh(l,cyl(.11,.1,.7,10),over,0,-0.35,0);box(l,0.22,0.12,0.34,'#7d5a3c',0,-0.78,0.06,0.05)});
- box(g,0.6,0.7,0.4,over,0,0.72,0,0.16);box(g,0.62,0.32,0.42,shirt,0,1.3,0,0.12);box(g,0.36,0.3,0.06,over,0,1.1,0.2,0.03);
- mesh(g,sph(0.27),skin,0,1.82,0);mesh(g,cyl(.55,.55,.04,24),'#f3d27a',0,2.02,0);mesh(g,cyl(.24,.28,.24,18),'#f3d27a',0,2.14,0);mesh(g,cyl(.285,.285,.06,18),'#f7a6bf',0,2.06,0);
- [-0.09,0.09].forEach(x=>mesh(g,sph(0.035),'#3d3a52',x,1.86,0.24));
- const armL=grp(g,-0.38,1.42,0),armR=grp(g,0.38,1.42,0);[armL,armR].forEach(a=>{mesh(a,cyl(.08,.07,.55,8),shirt,0,-0.27,0);mesh(a,sph(0.08),skin,0,-0.58,0)});
+const gardener={g:grp(world,3.4,0.25,5.2),path:[],state:'idle',timer:0,row:-1,face:0,toss:0,chopN:0,chopT:0,hit:false};
+{const g=gardener.g,skin='#f2c9a8',jeans='#5b7fb5',beard='#7a4a2a';
+ const plaid=canvasTex(64,64,x=>{x.fillStyle='#c8414b';x.fillRect(0,0,64,64);x.fillStyle='rgba(45,22,38,.55)';x.fillRect(0,22,64,12);x.fillRect(22,0,12,64);x.fillStyle='rgba(45,22,38,.3)';x.fillRect(0,52,64,4);x.fillRect(52,0,4,64);x.fillStyle='rgba(255,232,214,.4)';x.fillRect(0,42,64,2);x.fillRect(42,0,2,64)});
+ plaid.t.wrapS=plaid.t.wrapT=THREE.RepeatWrapping;plaid.t.repeat.set(2.4,2.4);const fl=new THREE.MeshStandardMaterial({map:plaid.t,roughness:.9});
+ const legL=grp(g,-0.14,0.75,0),legR=grp(g,0.14,0.75,0);[legL,legR].forEach(l=>{mesh(l,cyl(.11,.1,.7,10),jeans,0,-0.35,0);box(l,0.25,0.2,0.38,'#5a3d2b',0,-0.82,0.05,0.07)});
+ box(g,0.6,0.34,0.4,jeans,0,0.66,0,0.12);box(g,0.66,0.64,0.46,fl,0,0.92,0,0.16);box(g,0.68,0.07,0.48,'#5a3d2b',0,0.94,0,0.02);box(g,0.12,0.09,0.05,'#e0b04a',0,0.93,0.24,0.02);
+ mesh(g,sph(0.27),skin,0,1.84,0);
+ const bd=mesh(g,sph(0.26),beard,0,1.68,0.1);bd.scale.set(1.02,1.1,0.78);const bt=mesh(g,sph(0.16),beard,0,1.5,0.14);bt.scale.set(1.1,1,0.8);
+ const ms=mesh(g,sph(0.08),beard,0,1.79,0.25);ms.scale.set(2.3,0.65,0.8);mesh(g,sph(0.05),'#e8a98a',0,1.86,0.27);
+ [-0.1,0.1].forEach(x=>mesh(g,sph(0.035),'#3d3a52',x,1.93,0.23));[-0.1,0.1].forEach(x=>{const b=mesh(g,sph(0.05),beard,x,2.0,0.22);b.scale.set(1.4,0.45,0.6)});
+ mesh(g,new THREE.SphereGeometry(0.29,20,10,0,Math.PI*2,0,Math.PI/2),'#e0a23a',0,1.92,0);mesh(g,cyl(.3,.3,.11,20),'#c98a2a',0,1.95,0);mesh(g,sph(0.075),'#fff1c9',0,2.22,0);
+ const armL=grp(g,-0.41,1.44,0),armR=grp(g,0.41,1.44,0);[armL,armR].forEach(a=>{const sl=new THREE.Mesh(cyl(.095,.085,.55,8),fl);sl.position.y=-0.27;shade(sl);a.add(sl);mesh(a,sph(0.085),skin,0,-0.58,0)});
  const can=grp(armR,0,-0.62,0.12);mesh(can,cyl(.16,.18,.34,14),'#a6cff2',0,-0.05,0.08);const spout=mesh(can,cyl(.025,.04,.4,8),'#a6cff2',0,0.02,0.36);spout.rotation.x=1.1;
  const tip=new THREE.Object3D();tip.position.set(0,0.12,0.55);can.add(tip);
- Object.assign(gardener,{legL,legR,armL,armR,can,tip});g.traverse(o=>{if(o.isMesh)o.castShadow=true})}
+ const axe=grp(armR,0,-0.6,0.04);const hd=mesh(axe,cyl(.035,.04,.9,8),'#c99c76',0,0,0.36);hd.rotation.x=Math.PI/2;box(axe,0.06,0.28,0.22,'#9aa3b5',0,-0.08,0.76,0.02);box(axe,0.065,0.08,0.05,'#eef2f8',0,-0.17,0.83,0.01);axe.visible=false;
+ Object.assign(gardener,{legL,legR,armL,armR,can,tip,axe});g.traverse(o=>{if(o.isMesh)o.castShadow=true})}
 const drops=[];for(let i=0;i<10;i++){const d=new THREE.Mesh(sph(0.045),B('#7fc3f5'));d.visible=false;world.add(d);drops.push({m:d,v:new THREE.Vector3(),life:0})}
 const tipW=new THREE.Vector3();
 const V=(x,z)=>new THREE.Vector3(x,0,z);
-const FIRE_SPOT=V(3.3,-3.9),TANK_SPOT=V(2.4,-8.3),HOME_SPOT=V(3.4,5.6);
+const FIRE_SPOT=V(3.0,-4.25),TANK_SPOT=V(2.4,-8.3),HOME_SPOT=V(3.4,5.6);
 function activeRow(){let best=-1,bv=0;S.goals.forEach((g,i)=>{const v=g.a[month]>0?(g.target>0?g.a[month]/g.target:1):0;if(v>bv){bv=v;best=i}});return best}
 function pickSlotZ(r){const n=seeds(S.goals[r],month);const s=n>0?Math.floor(rnd()*n):0;return SLOTZ(s)}
 function route(to){const p=gardener.g.position,pts=[],inG=x=>x>4.4;let cx=p.x,cz=p.z;
@@ -548,11 +566,39 @@ function route(to){const p=gardener.g.position,pts=[],inG=x=>x>4.4;let cx=p.x,cz
  else if(!inG(to.x)&&!inG(cx)&&Math.abs(cx-to.x)+Math.abs(cz-to.z)>0.3)pts.push(V(4.1,cz),V(4.1,to.z));
  pts.push(V(to.x,to.z));gardener.path=pts;gardener.state='walk'}
 function sendGardener(){if(anim&&!anim.done)return;const r=activeRow(),G=gardener;G.row=r;G.faceTo=null;G.onArrive=null;G.onDone=null;
- if(r<0){route(HOME_SPOT);G.after='idle';return}route(V(ROWX[r]-1.55,pickSlotZ(r)));G.after='water'}
+ if(r<0){route(HOME_SPOT);G.after='idle';return}route(V(rows[r].lane,pickSlotZ(r)));G.after='water'}
 
 /* ---------- Monthly playback ---------- */
-const DAYS=[30,31,30],DAYDUR=0.8;
+const DAYS=[30,31,30],DAYDUR=1.6;
 let anim=null;
+const Sound={ctx:null,out:null,on:true,master:null,bus:null,crk:null,noise:null,timer:null,step:0,next:0,
+ ensure(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return false;if(!this.ctx){this.ctx=new AC();this.out=this.ctx.createGain();this.out.gain.value=this.on?1:0;this.out.connect(this.ctx.destination)}if(this.ctx.state==='suspended')this.ctx.resume().catch(()=>{});return true},
+ start(){try{if(!this.ensure()||this.master)return;const c=this.ctx,t=c.currentTime;this.master=c.createGain();this.master.gain.setValueAtTime(0,t);this.master.gain.linearRampToValueAtTime(0.42,t+2.5);this.master.connect(this.out);
+  const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1800;lp.Q.value=0.3;lp.connect(this.master);this.bus=lp;
+  const len=c.sampleRate*3,buf=c.createBuffer(1,len,c.sampleRate),d=buf.getChannelData(0);for(let i=0;i<len;i++){d[i]=(Math.random()*2-1)*0.006;if(Math.random()<0.0006)d[i]+=(Math.random()*2-1)*0.5}
+  const n=c.createBufferSource();n.buffer=buf;n.loop=true;this.crk=c.createGain();this.crk.gain.value=0.6;n.connect(this.crk);this.crk.connect(this.master);n.start();this.noise=n;
+  this.step=0;this.next=t+0.2;this.timer=setInterval(()=>this.tickMusic(),120)}catch(e){}},
+ tickMusic(){const c=this.ctx;if(!c||!this.bus)return;const e8=60/66/2;while(this.next<c.currentTime+0.5){this.playStep(this.step++,this.next);this.next+=e8}},
+ playStep(s,t){const e8=60/66/2,P=[[48,55,59,64],[45,52,55,60],[41,48,52,57],[43,50,53,59]],bar=Math.floor(s/8)%4,pos=s%8,ch=P[bar];
+  if(pos===0)ch.forEach((m,i)=>this.tone(m,t+i*0.05,e8*7.6,0.032,'triangle',0.5));
+  if(pos===0||pos===5)this.tone(ch[0]-12,t,e8*2.6,0.085,'sine',0.04);
+  const pent=[72,74,76,79,81,84];if(Math.random()<(pos%2===0?0.5:0.16))this.tone(pent[Math.floor(Math.random()*pent.length)],t+Math.random()*0.03,e8*2.4,0.026,'sine',0.006,true);
+  if(pos===2||pos===6)this.brush(t)},
+ tone(m,t,dur,vol,type,att,bell){const c=this.ctx,f=440*Math.pow(2,(m-69)/12),g=c.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(vol,t+att);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);g.connect(this.bus);
+  const o=c.createOscillator();o.type=type;o.frequency.value=f;o.connect(g);o.start(t);o.stop(t+dur+0.1);
+  if(bell){const o2=c.createOscillator(),g2=c.createGain();o2.frequency.value=f*2;g2.gain.value=0.3;o2.connect(g2);g2.connect(g);o2.start(t);o2.stop(t+dur*0.5)}},
+ noiseBuf(sec,pow){const c=this.ctx,len=c.sampleRate*sec|0,b=c.createBuffer(1,len,c.sampleRate),d=b.getChannelData(0);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,pow);return b},
+ brush(t){const c=this.ctx,s=c.createBufferSource();s.buffer=this.noiseBuf(0.12,3);const f=c.createBiquadFilter();f.type='highpass';f.frequency.value=5000;const g=c.createGain();g.gain.value=0.035;s.connect(f);f.connect(g);g.connect(this.bus);s.start(t)},
+ chop(){try{if(!this.ensure())return;const c=this.ctx,t=c.currentTime,s=c.createBufferSource();s.buffer=this.noiseBuf(0.18,6);const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=900;f.Q.value=1.2;
+  const g=c.createGain();g.gain.value=0.45;s.connect(f);f.connect(g);g.connect(this.out);s.start(t);
+  const o=c.createOscillator(),og=c.createGain();o.frequency.setValueAtTime(170,t);o.frequency.exponentialRampToValueAtTime(60,t+0.15);og.gain.setValueAtTime(0.22,t);og.gain.exponentialRampToValueAtTime(0.001,t+0.18);o.connect(og);og.connect(this.out);o.start(t);o.stop(t+0.2)}catch(e){}},
+ crackle(v){if(this.crk)this.crk.gain.value=0.5+v*1.5},
+ stop(fade=1.5){if(!this.master)return;const c=this.ctx,m=this.master,n=this.noise;clearInterval(this.timer);this.master=this.bus=this.crk=this.noise=null;
+  try{m.gain.cancelScheduledValues(c.currentTime);m.gain.setValueAtTime(m.gain.value,c.currentTime);m.gain.linearRampToValueAtTime(0,c.currentTime+fade);setTimeout(()=>{try{n.stop();m.disconnect()}catch(e){}},fade*1000+300)}catch(e){}},
+ setOn(v){this.on=v;try{localStorage.setItem('cozy-sound',v?'on':'off')}catch(e){}if(this.out)this.out.gain.setTargetAtTime(v?1:0,this.ctx.currentTime,0.1);if(v&&anim&&!anim.done&&!this.master)this.start()}};
+try{Sound.on=localStorage.getItem('cozy-sound')!=='off'}catch(e){}
+function syncSound(){const b=document.getElementById('pSound');b.classList.toggle('off',!Sound.on);b.setAttribute('aria-pressed',String(Sound.on));b.setAttribute('aria-label',Sound.on?'Music on':'Music off')}
+document.getElementById('pSound').addEventListener('click',()=>{Sound.setOn(!Sound.on);syncSound()});
 function dueDay(due,i){const m=/(\d+)/.exec(due||'');return m?clamp(+m[1],1,28):3+(i*5)%24}
 function genTx(m){const tx=[],inc=S.income[m]||0;
  if(inc>0){const h=Math.round(inc/2);tx.push({d:1,desc:'Paycheck',amt:h,k:'in'},{d:15,desc:'Paycheck',amt:inc-h,k:'in'})}
@@ -572,7 +618,7 @@ function gardenTargets(){S.goals.forEach((gl,i)=>{const n=anim&&!anim.done&&!ani
 function snapGarden(){for(const s of slots){s.cur=s.target;s.delay=0}}
 const toastsEl=document.getElementById('toasts'),tv=new THREE.Vector3();
 function toast(text,pos,cls){tv.copy(pos);world.localToWorld(tv);tv.project(cam);const x=(tv.x+1)/2*innerWidth,y=(1-tv.y)/2*innerHeight;if(x<0||x>innerWidth||y<40||y>innerHeight)return;
- while(toastsEl.children.length>9)toastsEl.firstChild.remove();const el=document.createElement('div');el.className='toast '+cls;el.textContent=text;el.style.left=clamp(x,70,innerWidth-70)+'px';el.style.top=y+'px';toastsEl.appendChild(el);setTimeout(()=>el.remove(),2100)}
+ while(toastsEl.children.length>9)toastsEl.firstChild.remove();const el=document.createElement('div');el.className='toast '+cls;el.textContent=text;el.style.left=clamp(x,70,innerWidth-70)+'px';el.style.top=y+'px';toastsEl.appendChild(el);setTimeout(()=>el.remove(),2700)}
 const pileTop=()=>new THREE.Vector3(PILE.x,0.25+0.3+Math.max(0,pileShown)*0.32/PILE.cols+0.9,PILE.z);
 function startAnim(){if(view)close();const st=monthStats(month);unit=niceUnit(st.max);const days=DAYS[month];
  const byDay={};st.tx.forEach(x=>{const d=clamp(x.d,1,days);(byDay[d]=byDay[d]||[]).push(x)});const ev=[];
@@ -582,15 +628,15 @@ function startAnim(){if(view)close();const st=monthStats(month);unit=niceUnit(st
  pileTarget=clamp(Math.floor(Math.max(0,st.open)/unit),0,logs.length);pileShown=pileTarget;logs.forEach((l,i)=>{l.g.visible=i<pileShown;l.g.position.copy(l.base);l.drop=0});
  gardenTargets();snapGarden();tankLevel=S.tank.goal?clamp(startBal(S.tank,month)/S.tank.goal,0,1):0;
  const G=gardener;G.onArrive=null;G.onDone=null;G.row=-2;G.faceTo=null;route(FIRE_SPOT);G.after='fire';
- selected=null;flyTo(null);document.body.classList.add('playing');updatePlaybar()}
+ selected=null;flyTo(null);document.body.classList.add('playing');Sound.start();syncSound();updatePlaybar()}
 function fireEv(e){const A=anim;
- if(e.k==='in'){A.bal+=e.amt;toast(`+${fmt(e.amt)} ${e.desc}`,new THREE.Vector3(PILE.x,4.2,PILE.z),'in')}else A.bal-=e.amt;
+ if(e.k==='in'){A.bal+=e.amt;toast(`+${fmt(e.amt)} ${e.desc}`,new THREE.Vector3(PILE.x,4.2,PILE.z),'in');const G=gardener;if(G.state==='fire'||G.state==='chop'){G.chopN=Math.min(6,(G.state==='chop'?G.chopN:0)+3);if(G.state!=='chop'){G.chopT=0;G.hit=false}G.state='chop'}}else A.bal-=e.amt;
  const nt=clamp(Math.floor(Math.max(0,A.bal)/unit),0,logs.length);pileTarget=nt;
  if(e.k==='out'){const b=e.bill&&billById(e.bill),h=b&&b.spot&&SPOTS[b.spot];
   if(h){h.pulse=1;toast(`−${fmt(e.amt)} ${b.name}`,new THREE.Vector3(h.ctr.x,h.ctr.y+1.5,h.ctr.z),'out')}else toast(`−${fmt(e.amt)} ${e.desc}`,new THREE.Vector3(1.9,3.4,-2.5),'out');
-  const n=clamp(pileShown-nt,1,5);for(let i=0;i<n;i++)A.tq.push({d:i*0.12,dest:STOVE_MOUTH,cb:()=>{fireHeat=1}})}
+  const n=clamp(pileShown-nt,1,8);for(let i=0;i<n;i++)A.tq.push({d:i*0.12,dest:STOVE_MOUTH,cb:()=>{fireHeat=1}})}
  else if(e.k==='save'){const gi=e.goal==='tank'?-1:+String(e.goal).slice(4),g=gi<0?S.tank:S.goals[gi];if(!g)return;
-  const dest=gi<0?new THREE.Vector3(2.5,6.9,-10.6):new THREE.Vector3(ROWX[gi],1,8);toast(`${fmt(e.amt)} → ${g.name}`,new THREE.Vector3(PILE.x,4.2,PILE.z),'save');
+  const dest=gi<0?new THREE.Vector3(2.5,6.9,-10.6):new THREE.Vector3(rows[gi].x,1,8);toast(`${fmt(e.amt)} → ${g.name}`,new THREE.Vector3(PILE.x,4.2,PILE.z),'save');
   const n=clamp(pileShown-nt,1,3);for(let i=0;i<n;i++)A.tq.push({d:i*0.14,dest,cb:null})}}
 function doToss(q){let from;if(pileShown>pileTarget&&pileShown>0){const l=logs[--pileShown];l.g.visible=false;from=new THREE.Vector3(PILE.x+l.base.x,0.25+l.base.y,PILE.z+l.base.z)}else from=pileTop();
  gardener.toss=0.35;fly(from,q.dest,0.75,q.cb)}
@@ -601,21 +647,21 @@ function tickAnim(dt){const A=anim;if(!A||A.paused)return;
  updatePlaybar()}
 function beginEnd(){const A=anim;A.queue=[];if(S.tank.a[month]>0)A.queue.push('tank');S.goals.forEach((g,i)=>{if(g.a[month]>0)A.queue.push(i)});nextTask()}
 function nextTask(){const A=anim;if(!A||A.done)return;const k=A.queue.shift();if(k===undefined)return finishAnim();const G=gardener,g=k==='tank'?S.tank:S.goals[k];
- if(k==='tank'){route(TANK_SPOT);G.faceTo=Math.PI;G.row=-3}else{const n=Math.max(1,seeds(g,month));route(V(ROWX[k]-1.55,SLOTZ(n-1)));G.faceTo=Math.PI/2;G.row=k}
+ if(k==='tank'){route(TANK_SPOT);G.faceTo=Math.PI;G.row=-3}else{const n=Math.max(1,seeds(g,month));route(V(rows[k].lane,SLOTZ(n-1)));G.faceTo=Math.PI/2;G.row=k}
  G.after='work';
  G.onArrive=()=>{A.reached.add(k);gardenTargets();const add=plantsFor(g,balance(g,month))-plantsFor(g,startBal(g,month));
-  const pos=k==='tank'?new THREE.Vector3(2.5,9.2,-10.6):new THREE.Vector3(ROWX[k],2.6,SLOTZ(Math.max(0,seeds(g,month)-1)));
+  const pos=k==='tank'?new THREE.Vector3(2.5,9.2,-10.6):new THREE.Vector3(rows[k].x,2.6,SLOTZ(Math.max(0,seeds(g,month)-1)));
   toast(`+${fmt(g.a[month])}${k==='tank'?' · water rising':add>0?` · ${add} new plant${add===1?'':'s'}`:' · growing'}`,pos,'save')};
  G.onDone=nextTask}
-function finishAnim(){const A=anim;if(!A)return;A.done=true;A.phase='done';A.t=A.days;A.tq=[];A.reached=new Set(['tank',0,1,2,3]);gardenTargets();restPile();updatePlaybar();
- const G=gardener;G.onArrive=null;G.onDone=null;setTimeout(()=>{if(anim===A)sendGardener()},1400)}
+function finishAnim(){const A=anim;if(!A)return;A.done=true;A.phase='done';A.t=A.days;A.tq=[];A.reached=new Set(['tank',...S.goals.map((g,i)=>i)]);gardenTargets();restPile();updatePlaybar();
+ const G=gardener;G.onArrive=null;G.onDone=null;setTimeout(()=>{if(anim===A)sendGardener()},1400);setTimeout(()=>{if(anim===A)Sound.stop(3)},6000)}
 function skipAnim(){const A=anim;if(!A||A.done)return;while(A.i<A.ev.length){const e=A.ev[A.i++];A.bal+=e.k==='in'?e.amt:-e.amt}A.queue=[];finishAnim()}
-function stopAnim(){if(!anim)return;anim=null;document.body.classList.remove('playing');restPile();gardenTargets();sendGardener()}
+function stopAnim(){if(!anim)return;anim=null;Sound.stop();document.body.classList.remove('playing');restPile();gardenTargets();sendGardener()}
 const pEl=id=>document.getElementById(id);
 function updatePlaybar(){const A=anim;if(!A)return;const d=Math.min(A.days,Math.floor(A.t)+1);
  pEl('pDay').textContent=`${MONTHS[month]} ${A.phase==='month'||A.phase==='intro'?d:A.days}`;pEl('pBar').style.width=(A.t/A.days*100)+'%';
  const pb=pEl('pBal');pb.textContent=(A.bal<0?'−':'')+fmt(Math.abs(A.bal));pb.classList.toggle('neg',A.bal<0);
- pEl('pCap').textContent=A.phase==='intro'?'Heading to the woodpile…':A.phase==='month'?(A.paused?'Paused':'Paychecks stack the woodpile · spending feeds the stove'):A.phase==='end'?'Month’s done · off to tend the savings':`${MONTHS[month]}: ${fmt(A.inT)} in · ${fmt(A.outT)} spent · ${fmt(A.saveT)} saved`;
+ pEl('pCap').textContent=A.phase==='intro'?'Heading to the woodpile…':A.phase==='month'?(A.paused?'Paused':'Paychecks get chopped onto the woodpile · spending feeds the stove'):A.phase==='end'?'Month’s done · off to tend the savings':`${MONTHS[month]}: ${fmt(A.inT)} in · ${fmt(A.outT)} spent · ${fmt(A.saveT)} saved`;
  const t=pEl('pToggle'),k=pEl('pSkip');t.textContent=A.done?'↻':A.paused?'▶':'❚❚';t.setAttribute('aria-label',A.done?'Replay':A.paused?'Play':'Pause');k.textContent=A.done?'×':'»';k.setAttribute('aria-label',A.done?'Close playback':'Skip to the end')}
 pEl('pToggle').addEventListener('click',()=>{if(!anim)return;if(anim.done)startAnim();else{anim.paused=!anim.paused;updatePlaybar()}});
 pEl('pSkip').addEventListener('click',()=>{if(!anim)return;if(anim.done)stopAnim();else skipAnim()});
@@ -628,6 +674,7 @@ const flies=[];
 
 /* ---------- State → scene ---------- */
 const byId={};hot.forEach(h=>byId[h.id]=h);
+buildGarden();
 const billAt=sid=>S.bills.find(b=>b.spot===sid);
 const billById=id=>S.bills.find(b=>b.id===id);
 const isOver=b=>b.a[month]>b.budget;
@@ -676,14 +723,14 @@ function vSpot(h){const others=S.bills.filter(b=>b.spot!==h.id);
  ${others.length?`<h3>Or move an existing bill here</h3><div class="grid2"><select id="m-bill" aria-label="Bill to move">${others.map(b=>`<option value="${b.id}">${esc(b.name)}${b.spot&&SPOTS[b.spot]?' (in '+esc(SPOTS[b.spot].label)+')':''}</option>`).join('')}</select><button class="btn sm ghost" data-act="moveHere" data-spot="${h.id}">Move here</button></div>`:''}`}
 function vGoal(h){const tank=h.kind==='tank',g=tank?S.tank:S.goals[h.gi],v=g.a[month],bal=balance(g,month),met=v>=g.target,left=Math.max(0,g.goal-bal),mo=g.target>0?Math.ceil(left/g.target):0;
  const where=tank?`The water tower · ${g.goal?Math.round(bal/g.goal*100):0}% full`:`Garden row ${h.gi+1} · ${seeds(g,month)} of ${SLOTS} plants · each plant is 10% of the goal${gardener.row===h.gi?' · the gardener is working here':''}`;
- return `${head(tank?'Safety net':'Savings goal')}<h2>${esc(g.name)}</h2><p class="where">${where}</p>
+ return `${head(tank?'Safety net':'Savings goal')}<h2>${esc(g.name)}</h2><p class="where">${where}${g.account?' · '+esc(g.account):''}</p>
  <div class="big"><b>${fmt(v)}</b><span class="pill ${met?'ok':'over'}">${met?(v>g.target?fmt(v-g.target)+' above target':'Target met'):fmt(g.target-v)+' short of target'}</span></div>
  <div class="meter ${tank?'water':''}"><i style="width:${g.goal?Math.min(100,bal/g.goal*100):0}%"></i></div>
  <p class="sub">${fmt(bal)} saved of ${fmt(g.goal)} · target ${fmt(g.target)} a month</p>
  ${histHTML(g.a,month)}<p class="note">${left?(mo?`At ${fmt(g.target)} a month the ${tank?'tank fills':'goal is reached'} in about ${mo} month${mo===1?'':'s'}.`:'Set a monthly target to see when you’ll get there.'):'Goal reached. Time to pick the next one.'} ${tank?'Every deposit raises the water line on the tower’s gauge.':'A new plant sprouts each time the balance passes the next 10% of the goal.'}</p>`}
 function segments(){const inc=S.income[month]||0;
  const items=S.bills.map(b=>({id:b.id,name:b.name,v:b.a[month],over:isOver(b)?b.a[month]-b.budget:0})).sort((a,b)=>b.v-a.v).map((x,i)=>Object.assign(x,{c:PAL[i%PAL.length]}));
- const sav=[{id:'tank',name:S.tank.name,v:S.tank.a[month],c:'#4f9fe0'},...S.goals.map((g,i)=>({id:'goal'+i,name:g.name,v:g.a[month],c:GOAL_LOOK[i].color}))];
+ const sav=[{id:'tank',name:S.tank.name,v:S.tank.a[month],c:'#4f9fe0'},...S.goals.map((g,i)=>({id:'goal'+i,name:g.name,v:g.a[month],c:rows[i]?rows[i].look.color:'#cccccc'}))];
  const used=[...items,...sav].reduce((s,x)=>s+x.v,0);return {inc,items,sav,used,left:inc-used}}
 function vPile(){const st=monthStats(month),sm=k=>st.tx.filter(x=>x.k===k).reduce((s,x)=>s+x.amt,0),up=Array.isArray(S.tx[month])&&S.tx[month].length;
  return `${head('Checking account')}<h2>Woodpile &amp; stove</h2><p class="where">Each log is ${fmt(unit)}. Paychecks stack wood; every purchase goes in the stove.</p>
@@ -715,9 +762,10 @@ function vBudget(){const tabs=['overview','edit','upload'].map(t=>`<button type=
   <h3>Savings</h3>${[S.tank,...S.goals].map((g,i)=>`<div class="erow">
    <label class="f nm">${i===0?'Water tower':'Garden row '+i}<input type="text" data-ed="gname" data-g="${i}" value="${esc(g.name)}"></label>
    <label class="f">Target / mo<input type="number" inputmode="decimal" data-ed="gtarget" data-g="${i}" value="${g.target}"></label>
-   <label class="f">Saved<input type="number" inputmode="decimal" data-ed="gsaved" data-g="${i}" value="${g.a[month]}"></label><span></span>
-   <label class="f wide">Goal total<input type="number" inputmode="decimal" data-ed="ggoal" data-g="${i}" value="${g.goal}"></label></div>`).join('')}
-  <div class="actions"><button class="btn sm danger" data-act="reset">Reset to sample budget</button></div>`}
+   <label class="f">Saved<input type="number" inputmode="decimal" data-ed="gsaved" data-g="${i}" value="${g.a[month]}"></label>${i?`<button class="del" data-act="delGoal" data-g="${i}" aria-label="Remove ${esc(g.name)}">×</button>`:'<span></span>'}
+   <div class="wide grid2"><label class="f">Goal total<input type="number" inputmode="decimal" data-ed="ggoal" data-g="${i}" value="${g.goal}"></label><label class="f">Bank account<input type="text" data-ed="gacct" data-g="${i}" value="${esc(g.account||'')}" placeholder="e.g. Ally savings ••1234"></label></div></div>`).join('')}
+  <p class="sub" style="margin-top:10px">When you upload transactions, transfers to a row’s bank account (matched by its name or last four digits) fill that row.</p>
+  <div class="actions">${S.goals.length<6?'<button class="btn sm ghost" data-act="addGoal">+ Add garden row</button>':''}<button class="btn sm danger" data-act="reset">Reset to sample budget</button></div>`}
  else{body=`<p class="sub" style="margin-top:12px"><b>Bank transactions</b> (date, description, amount): the month plays back day by day and each purchase lands on a matching object (Safeway → fridge, Shell → gas can, Netflix → TV). <b>A budget</b> (name, category, budget, spent) replaces your bills instead. CSV or JSON.</p>
   <label class="drop" id="drop" style="margin-top:12px"><b style="color:var(--ink)">Choose a file</b><span>or drop it here · .csv or .json</span><input type="file" id="file" accept=".csv,.json,text/csv,application/json" style="position:absolute;opacity:0;width:1px;height:1px"></label>
   ${uploadMsg?`<p class="msg">${uploadMsg}</p>`:''}
@@ -758,7 +806,9 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
  if(a==='moveHere'){const b=billById(v('m-bill').value);if(b){assign(b,t.dataset.spot);save();applyMonth(false);open({t:'bill',id:b.id})}}
  if(a==='addRow'){S.bills.push({id:uid(),name:'New bill',cat:'Other',budget:0,a:[0,0,0],due:'',note:'',spot:null});save();applyMonth(false);view.keep=true;render();const ins=sheet.querySelectorAll('[data-ed=name]');const last=ins[ins.length-1];if(last){last.focus();last.select()}}
  if(a==='delRow'){S.bills.splice(+t.dataset.i,1);save();applyMonth(false);view.keep=true;render()}
- if(a==='reset'){S=clone(SAMPLE);edited=false;try{localStorage.removeItem(KEY)}catch(err){}applyMonth(false);view.keep=true;render()}
+ if(a==='addGoal'&&S.goals.length<6){S.goals.push({name:'New goal',goal:1000,start:0,target:50,a:[0,0,0],account:''});buildGarden();save(true);applyMonth(false);view.keep=true;render();return}
+ if(a==='delGoal'){S.goals.splice(+t.dataset.g-1,1);buildGarden();save(true);gardener.row=-1;applyMonth(false);sendGardener();view.keep=true;render();return}
+ if(a==='reset'){S=clone(SAMPLE);edited=false;buildGarden();try{localStorage.removeItem(KEY)}catch(err){}applyMonth(false);view.keep=true;render()}
  if(a==='copyCsv'){const txt=toCSV(),ta=v('tpl');const done=()=>{t.textContent='Copied';setTimeout(()=>t.textContent='Copy current budget as CSV',1600)};
   const fallback=()=>{ta.focus();ta.select();t.textContent='Selected · copy it from the box'};
   try{navigator.clipboard.writeText(txt).then(done,fallback)}catch(err){fallback()}}});
@@ -773,6 +823,7 @@ sheet.addEventListener('change',e=>{const el=e.target,ed=el.dataset.ed;if(!ed)re
  if(ed==='gtarget')G.target=num(el.value);
  if(ed==='gsaved')G.a[month]=num(el.value);
  if(ed==='ggoal')G.goal=num(el.value);
+ if(ed==='gacct')G.account=el.value.trim().slice(0,40);
  save();applyMonth(false)});
 document.getElementById('budgetBtn').addEventListener('click',()=>{if(anim)stopAnim();selected=null;flyTo(null);budgetTab='overview';open({t:'budget'})});
 addEventListener('keydown',e=>{if(e.target.matches&&e.target.matches('input,select,textarea,button'))return;if(e.key===' '&&anim&&!anim.done){e.preventDefault();anim.paused=!anim.paused;updatePlaybar();return}if(e.key==='Escape'){if(view)close();else if(anim)stopAnim()}if(e.key==='ArrowLeft'&&month>0){if(anim)stopAnim();month--;applyMonth()}if(e.key==='ArrowRight'&&month<2){if(anim)stopAnim();month++;applyMonth()}});
@@ -819,6 +870,8 @@ function importTx(rows,hasHead,h){const col=(re,d)=>hasHead?h.findIndex(x=>re.te
  for(const x of raw.filter(r=>r.mo===topMo)){const text=(x.desc+' '+x.cat),lo=text.toLowerCase();
   if(x.v>0){tx.push({d:x.d,desc:/payroll|salary|paycheck|direct dep/i.test(x.desc)?'Paycheck':x.desc,amt:x.v,k:'in'});continue}
   const amt=-x.v;
+  {let acct=null;const l4=a=>((a||'').match(/(\d{4})\D*$/)||[])[1],hit=g=>{if(!g||!g.account)return false;const d4=l4(g.account);if(d4&&lo.includes(d4))return true;return g.account.toLowerCase().split(/[^a-z]+/).filter(w=>w.length>3&&!/saving|account|checking|bank|union|credit/.test(w)).some(w=>lo.includes(w))};
+   if(hit(S.tank))acct='tank';else S.goals.forEach((g,i)=>{if(!acct&&hit(g))acct='goal'+i});if(acct){tx.push({d:x.d,desc:x.desc,amt,k:'save',goal:acct});continue}}
   if(/transfer|saving/i.test(text)){let goal=null;S.goals.forEach((g,i)=>{if(!goal&&g.name.toLowerCase().split(/\W+/).some(w=>w.length>3&&lo.includes(w)))goal='goal'+i});
    if(!goal&&/emergency|rainy|safety|saving/i.test(text))goal='tank';if(goal){tx.push({d:x.d,desc:x.desc,amt,k:'save',goal});continue}}
   let b=x.cat?S.bills.find(y=>y.name.toLowerCase()===x.cat.toLowerCase()):null;
@@ -833,23 +886,23 @@ function importTx(rows,hasHead,h){const col=(re,d)=>hasHead?h.findIndex(x=>re.te
  const c=k=>tx.filter(t=>t.k===k).length;
  uploadMsg=`Loaded <b>${tx.length} transactions</b> into ${MONTHS[m]}: ${c('in')} deposits, ${c('out')} purchases, ${c('save')} savings transfers.${created.length?' New spots: '+created.map(b=>esc(b.name)).join(', ')+'.':''} Playing the month…`;
  budgetTab='upload';render();setTimeout(()=>{if(view&&view.t==='budget'&&budgetTab==='upload')startAnim()},1500)}
-function sanG(g){return{name:String(g.name||'Goal').slice(0,40),goal:num(g.goal),start:num(g.start),target:num(g.target),a:Array.isArray(g.a)&&g.a.length===3?g.a.map(num):[0,0,0]}}
+function sanG(g){return{account:String(g.account||'').slice(0,40),name:String(g.name||'Goal').slice(0,40),goal:num(g.goal),start:num(g.start),target:num(g.target),a:Array.isArray(g.a)&&g.a.length===3?g.a.map(num):[0,0,0]}}
 function importText(text,name){let n=0,extra='';
  if(/\.json$/i.test(name)||/^\s*[\[{]/.test(text)){const d=JSON.parse(text);const arr=Array.isArray(d)?d:d.bills;if(!Array.isArray(arr))throw 0;
   const bills=arr.map(x=>({id:uid(),name:String(x.name||'Bill').slice(0,60),cat:CATS.includes(x.cat||x.category)?(x.cat||x.category):'Other',budget:num(x.budget),
    a:Array.isArray(x.a)&&x.a.length===3?x.a.map(num):[0,0,0].map(()=>num(x.spent!=null?x.spent:x.budget)),due:String(x.due||'').slice(0,30),note:String(x.note||'').slice(0,200),spot:SPOTS[x.spot]?x.spot:null}));
-  if(!Array.isArray(d)){if(Array.isArray(d.income)&&d.income.length===3)S.income=d.income.map(num);if(d.tank)Object.assign(S.tank,sanG(d.tank));if(Array.isArray(d.goals))d.goals.slice(0,4).forEach((g,i)=>Object.assign(S.goals[i],sanG(g)))}
+  if(!Array.isArray(d)){if(Array.isArray(d.income)&&d.income.length===3)S.income=d.income.map(num);if(d.tank)Object.assign(S.tank,sanG(d.tank));if(Array.isArray(d.goals)){S.goals=d.goals.slice(0,6).map(sanG);buildGarden()}}
   const taken=new Set(bills.filter(b=>b.spot).map(b=>b.spot));autoPlace(bills.filter(b=>!b.spot),taken);S.bills=bills;n=bills.length}
  else{const rows=parseCSV(text);if(!rows.length)throw 0;const h=rows[0].map(s=>s.toLowerCase());const hasHead=h.some(s=>/name|item|category|budget|amount|spent|actual|date|desc/.test(s));
   if((hasHead&&h.some(s=>/date|posted/.test(s)))||(!hasHead&&parseDay(rows[0][0])))return importTx(rows,hasHead,h);
   const col=(re,d)=>hasHead?h.findIndex(s=>re.test(s)):d;
   const ci={name:col(/name|item|bill|expense|description|payee/,0),cat:col(/categ|group|type/,-1),budget:col(/budget|planned|amount|limit/,1),spent:col(/spent|actual|paid/,2)};if(ci.name<0)ci.name=0;
-  const bills=[];let gi=0;for(const r of rows.slice(hasHead?1:0)){const nm=(r[ci.name]||'').slice(0,60);if(!nm)continue;const cat=ci.cat>=0?(r[ci.cat]||''):'';const bud=ci.budget>=0?num(r[ci.budget]):0;
+  const bills=[];let gi=0,grew=false;for(const r of rows.slice(hasHead?1:0)){const nm=(r[ci.name]||'').slice(0,60);if(!nm)continue;const cat=ci.cat>=0?(r[ci.cat]||''):'';const bud=ci.budget>=0?num(r[ci.budget]):0;
    const sp=ci.spent>=0&&r[ci.spent]!==undefined&&r[ci.spent]!==''?num(r[ci.spent]):bud;
    if(/income|take.?home|paycheck|salary|wages/i.test(nm+' '+cat)){S.income=S.income.map(()=>bud||sp);extra+=` Take-home pay set to ${fmt(bud||sp)}.`;continue}
-   if(/saving/i.test(cat)){if(/emergency|rainy|safety/i.test(nm)){S.tank.name=nm;S.tank.target=bud;S.tank.a=[sp,sp,sp]}else if(gi<4){const g=S.goals[gi++];g.name=nm;g.target=bud;g.a=[sp,sp,sp]}continue}
+   if(/saving/i.test(cat)){if(/emergency|rainy|safety/i.test(nm)){S.tank.name=nm;S.tank.target=bud;S.tank.a=[sp,sp,sp]}else if(gi<6){if(!S.goals[gi]){S.goals.push({name:nm,goal:Math.max(bud*12,100),start:0,target:bud,a:[0,0,0],account:''});grew=true}const g=S.goals[gi++];g.name=nm;g.target=bud;g.a=[sp,sp,sp]}continue}
    const c=CATS.find(x=>x.toLowerCase()===cat.toLowerCase())||'Other';bills.push({id:uid(),name:nm,cat:c,budget:bud,a:[sp,sp,sp],due:'',note:'',spot:null})}
-  if(!bills.length)throw 0;autoPlace(bills);S.bills=bills;n=bills.length;extra+=' All three months start with the same amounts; switch months to edit Sep and Oct.'}
+  if(!bills.length)throw 0;if(grew)buildGarden();autoPlace(bills);S.bills=bills;n=bills.length;extra+=' All three months start with the same amounts; switch months to edit Sep and Oct.'}
  save();applyMonth(false);const unplaced=S.bills.filter(b=>!b.spot).length;
  uploadMsg=`Loaded <b>${n} bill${n===1?'':'s'}</b>${unplaced?`; ${unplaced} didn’t fit in the house and show only in the budget`:'; every one has a spot in the house'}.${esc(extra)}`;budgetTab='upload';render()}
 
@@ -888,15 +941,20 @@ function resize(){const w=innerWidth,h=innerHeight,a=w/h;renderer.setSize(w,h,fa
 addEventListener('resize',resize);resize();zoom=zoomGoal=baseZoom;
 
 function tickGardener(dt,t){const G=gardener,g=G.g;
+ G.can.visible=G.state==='water'||G.state==='work';G.axe.visible=G.state==='chop';stumpAxe.visible=!G.axe.visible;
  if(G.state==='walk'){if(G.path.length){const tgt=G.path[0],dx=tgt.x-g.position.x,dz=tgt.z-g.position.z,d=Math.hypot(dx,dz);
-   if(d<0.05)G.path.shift();else{const st=Math.min(d,(anim&&!anim.done?(anim.phase==='intro'?5:2.8):1.7)*dt);g.position.x+=dx/d*st;g.position.z+=dz/d*st;G.face=Math.atan2(dx,dz)}}
+   if(d<0.05)G.path.shift();else{const st=Math.min(d,(anim&&!anim.done?(anim.phase==='intro'?5:2.3):1.7)*dt);g.position.x+=dx/d*st;g.position.z+=dz/d*st;G.face=Math.atan2(dx,dz)}}
   const sw=reduce?0:Math.sin(t*9)*0.55;G.legL.rotation.x=sw;G.legR.rotation.x=-sw;G.armL.rotation.x=-sw*0.8;G.armR.rotation.x=sw*0.3-0.4;G.can.rotation.x=0;g.position.y=0.25+(reduce?0:Math.abs(Math.sin(t*9))*0.05);
-  if(!G.path.length){G.state=G.after||'idle';G.timer=G.state==='work'?2.8:2.5+rnd()*2;if(G.onArrive){const f=G.onArrive;G.onArrive=null;f()}}}
+  if(!G.path.length){G.state=G.after||'idle';G.timer=G.state==='work'?3.6:2.5+rnd()*2;if(G.onArrive){const f=G.onArrive;G.onArrive=null;f()}}}
  else{G.legL.rotation.x=G.legR.rotation.x=0;g.position.y=0.25;
   if(G.state==='water'||G.state==='work'){G.face=G.faceTo!=null?G.faceTo:Math.PI/2;G.armR.rotation.x=-1.1;G.armL.rotation.x=-0.2;G.can.rotation.x=0.9+(reduce?0:Math.sin(t*3)*0.08);
    G.tip.getWorldPosition(tipW);world.worldToLocal(tipW);
    if(!reduce&&Math.random()<dt*14){const d=drops.find(x=>x.life<=0);if(d){d.m.position.copy(tipW);d.v.set(Math.sin(G.face)*0.7,0.3,Math.cos(G.face)*0.7);d.life=1;d.m.visible=true}}
    G.timer-=dt;if(G.timer<=0){if(G.state==='work'){G.state='wait';const f=G.onDone;G.onDone=null;f&&f()}else if(G.row>=0){route(V(g.position.x,pickSlotZ(G.row)));G.after='water'}else G.state='idle'}}
+  else if(G.state==='chop'){G.face=Math.atan2(BLOCK.x-g.position.x,BLOCK.z-g.position.z);G.chopT+=dt;const ph=G.chopT/0.62;
+   const ang=ph<0.6?-0.4-2.6*(ph/0.6):-3.0+2.2*Math.min(1,(ph-0.6)/0.14);G.armR.rotation.x=ang;G.armL.rotation.x=ang*0.85;
+   if(!G.hit&&ph>=0.74){G.hit=true;Sound.chop();if(!reduce){fly(BLOCK,pileTop(),0.55,null,0.42);fly(BLOCK,pileTop(),0.7,null,0.38)}}
+   if(ph>=1){G.chopT=0;G.hit=false;if(--G.chopN<=0)G.state='fire'}}
   else if(G.state==='fire'){G.face=Math.atan2(1.9-g.position.x,-2.5-g.position.z);G.can.rotation.x=0;G.armL.rotation.x=-0.3;
    if(G.toss>0){G.toss=Math.max(0,G.toss-dt);G.armR.rotation.x=-2.4*Math.sin((1-G.toss/0.35)*Math.PI)}else G.armR.rotation.x=-0.25}
   else{G.face=Math.PI/4;G.armR.rotation.x=-0.3;G.armL.rotation.x=0;G.can.rotation.x=0}}
@@ -927,7 +985,7 @@ function tick(){const dt=Math.min(clock.getDelta(),0.05),t=clock.elapsedTime,k=1
 applyMonth();
 for(const s of slots){s.cur=s.target;s.delay=0}
 tankLevel=S.tank.goal?clamp(balance(S.tank,month)/S.tank.goal,0,1):0;
-{const r=activeRow();gardener.row=r;if(r>=0){gardener.g.position.set(ROWX[r]-1.55,0.25,pickSlotZ(r));gardener.path=[];gardener.state='water';gardener.timer=2}}
+{const r=activeRow();gardener.row=r;if(r>=0){gardener.g.position.set(rows[r].lane,0.25,pickSlotZ(r));gardener.path=[];gardener.state='water';gardener.timer=2}}
 restPile();pileShown=pileTarget;logs.forEach((l,i)=>l.g.visible=i<pileShown);
 if(document.fonts)document.fonts.ready.then(()=>{for(const k in COINS){coinDraw(coin[k].c.getContext('2d'),...COINS[k]);coin[k].t.needsUpdate=true}S.goals.forEach((g,i)=>packetDraw(i,month));plaqueDraw(month)});
 
