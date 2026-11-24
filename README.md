@@ -4,11 +4,11 @@ A cozy 2.5D house where every monthly bill is an object you can tap, and savings
 
 **Live demo:** https://invert-able.com/cozy.budget/
 
-- A six-room cutaway house where every bill is an object with a coin. Over-budget bills throb.
-- Tap an item to zoom in and open its bill card.
-- Each garden row is a savings goal, and its seed packet shows what you're saving for. Hitting the monthly target plants 6 seeds; saving extra fills the row.
+- A six-room cutaway house, yard and garden where every object can hold a bill. Over-budget bills get a pulsing red ring.
+- Tap anything to see its bill, or to add one to an empty object. Lavender "+" coins suggest new categories.
+- The Budget button shows a 100% bar of where take-home pay goes, plus an editor and CSV upload. Edits stay in your browser.
+- Each garden row is a savings goal, its seed packet shows what you're saving for, and a gardener tends the row that's furthest ahead.
 - The emergency fund is an old wooden water tower that fills up as you save.
-- Sep/Oct/Nov tabs switch months. Drag to turn, pinch or scroll to zoom.
 
 This is a demo with a made-up sample budget. No real financial data is used.
 
