@@ -22,7 +22,7 @@ body{font:16px/1.45 Fredoka,ui-rounded,"Segoe UI",system-ui,sans-serif;color:var
 .hud{position:fixed;left:0;right:0;top:0;padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left));display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;pointer-events:none}
 .hud>*{pointer-events:auto}
 .brand h1{margin:0;font-size:32px;line-height:1.05;font-weight:700;text-shadow:0 0 14px #fff,0 0 4px #fff}
-.brand p{margin:3px 0 0;color:var(--soft);font-size:14px}
+.brand p{margin:3px 0 0;color:var(--ink);font-size:14px;font-weight:500;text-shadow:0 0 10px #fff,0 0 4px #fff,0 0 2px #fff}
 .months{display:flex;background:#ffffffb3;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:999px;padding:4px;box-shadow:0 6px 20px #7a5fb022}
 .months button,.tabs button{font:inherit;font-weight:600;border:0;background:none;color:var(--soft);padding:0 18px;height:40px;border-radius:999px;cursor:pointer}
 .months button[aria-pressed=true],.tabs button[aria-pressed=true]{background:var(--ink);color:#fff}
@@ -163,24 +163,74 @@ if(!window.THREE){document.getElementById('loading').textContent='The 3D engine 
 
 /* ---------- Sample data ---------- */
 const MONTHS=['Sep','Oct','Nov'];
-const CATS=['Housing','Food','Transportation','Utilities','Insurance','Subscriptions','Family','Home','Health','Pets','Wants','Giving','Other'];
+/* Set categories: every budget is matched to this one list first, so budgets look the same for everyone.
+   Each has a home object in the house. Anything that doesn't fit becomes a custom category the user places on a free object.
+   line = words in a budget line's name, re = merchant names on a bank statement, pfc = Plaid's personal_finance_category codes. */
+const SET=[
+ {id:'housing',name:'Mortgage & rent',spot:'mailbox',line:/mortgage|\brent\b|\bhoa\b|property tax|home ?loan|housing|escrow/i,re:/mortgage|loan servic|rocket mortgage|mr\.? cooper|property management/i,pfc:/RENT_AND_UTILITIES_RENT|LOAN_PAYMENTS_MORTGAGE/},
+ {id:'heat',name:'Heating & natural gas',spot:'stove',line:/natural gas|heating|propane|furnace|heating oil/i,re:/cascade natural|nw natural|natural gas|propane|amerigas/i},
+ {id:'electric',name:'Electricity',spot:'lamp',line:/electric|\bpower\b|energy/i,re:/pacific power|pg&e|\bpge\b|edison|electric|power bill|duke energy|xcel energy/i,pfc:/GAS_AND_ELECTRICITY/},
+ {id:'water',name:'Water, sewer & trash',spot:'sink',line:/water|sewer|trash|garbage|recycl|waste/i,re:/city of .*utilit|utility billing|water|sewer|republic services|waste management|garbage|recology|waste connections/i,pfc:/WATER|SEWAGE_AND_WASTE/},
+ {id:'internet',name:'Internet',spot:'router',line:/internet|wi-?fi|broadband/i,re:/comcast|xfinity|spectrum|\btds\b|centurylink|frontier comm|starlink|cox comm|optimum|google fiber|ziply/i,pfc:/INTERNET_AND_CABLE/},
+ {id:'phone',name:'Phone',spot:'phone',line:/phone|\bcell\b|mobile|wireless/i,re:/verizon|t-mobile|at&t|mint mobile|visible|cricket|google \*?fi\b|us cellular|wireless/i,pfc:/TELEPHONE/},
+ {id:'subscriptions',name:'Streaming & subscriptions',spot:'tv',line:/stream|subscription|netflix|hulu|disney|spotify|youtube|audible|\bprime\b|paramount|peacock|\bhbo\b|apple (tv|music|one)|google one|icloud|dropbox|adobe|lightroom|patreon|\btv\b|cable/i,re:/netflix|hulu|disney\s?plus|disney\+|spotify|youtube|paramount|peacock|\bhbo\b|max\.com|audible|google \*?(google )?one|prime video|amazon prime|apple\.com\/bill|icloud|adobe|patreon|dropbox/i,pfc:/TV_AND_MOVIES|MUSIC_AND_AUDIO/},
+ {id:'dining',name:'Eating out',spot:'grill',line:/eat(ing)? out|restaurant|dining|take ?out|fast food|date night/i,re:/restaurant|pizza|taco|burger|mcdonald|chipotle|doordash|uber ?eats|grubhub|subway|jersey mike|olive garden|dairy queen|wendy'?s|panda express|chick-fil-a|drive ?in|diner|bistro|brewing|brewery/i,pfc:/RESTAURANT|FAST_FOOD/},
+ {id:'coffee',name:'Coffee',spot:'coffee',line:/coffee|caf[eé]/i,re:/starbucks|dutch bros|coffee|espresso|\bcafe\b/i,pfc:/COFFEE/},
+ {id:'groceries',name:'Groceries',spot:'fridge',line:/grocer|supermarket|\bfood\b/i,re:/safeway|costco(?! gas)|trader joe|fred[- ]?meyer|winco|kroger|grocer|albertsons|whole foods|\baldi\b|wm supercenter|walmart|natural grocers|sprouts|publix|wegmans|food lion|grocery outlet|h-e-b|\bheb\b/i,pfc:/GROCERIES/},
+ {id:'fuel',name:'Gas for the car',spot:'gascan',line:/fuel|gasoline|petrol|\bgas\b/i,re:/costco gas|shell|chevron|exxon|\bmobil\b|arco|texaco|\bbp\b|\b76\b|sinclair|valero|conoco|maverik|fuel|gas station/i,pfc:/TRANSPORTATION_GAS/},
+ {id:'car',name:'Car costs',spot:'car',line:/\bcars?\b|\bauto\b|vehicle|\bdmv\b|registration/i,re:/geico|progressive|state farm|allstate|farmers ins|usaa|liberty mutual|\bdmv\b|motor vehicle|jiffy lube|les schwab|discount tire|oil change|auto ?parts|o'?reilly|autozone|napa auto|car wash/i,pfc:/TRANSPORTATION_(?!GAS)|LOAN_PAYMENTS_CAR/},
+ {id:'health',name:'Health & medical',spot:'medcab',line:/health|medical|doctor|dental|dentist|vision|optom|pharm|prescription|\bhsa\b|counsel|therap|clinic/i,re:/blue cross|regence|kaiser|moda|pacificsource|aetna|cigna|united ?health|pharmacy|cvs|walgreens|clinic|dental|hospital|medical|therap|counsel/i,pfc:/MEDICAL/},
+ {id:'insurance',name:'Insurance',spot:'bed',line:/insur|life policy/i,re:/insurance|lemonade|northwestern mutual|new york life|aflac/i,pfc:/INSURANCE/},
+ {id:'debt',name:'Loans & credit cards',spot:'nightstand',line:/loan|debt|credit card|student|card payment|payoff/i,re:/navient|nelnet|mohela|sallie mae|sofi|upstart|lendingclub|loan pmt|loan payment|credit card payment|card services|capital one|american express|\bamex\b|citi card|synchrony|barclaycard/i,pfc:/LOAN_PAYMENTS/},
+ {id:'childcare',name:'Childcare',spot:'crib',line:/childcare|day ?care|preschool|babysit|nanny/i,re:/daycare|childcare|preschool|kindercare|bright horizons/i,pfc:/CHILDCARE/},
+ {id:'kids',name:'Kids’ activities',spot:'toychest',line:/\bkids?\b|child|school|activit|sport|soccer|lessons?|\bcamp\b|tuition|swim|dance/i,re:/school|soccer|\bsports?\b|league|lessons|swim|dick'?s sporting/i,pfc:/EDUCATION/},
+ {id:'clothing',name:'Clothing',spot:'washer',line:/cloth|apparel|shoes/i,re:/old navy|\bgap\b|kohl'?s|ross stores|nordstrom|carter'?s|h&m|\bzara\b|tj ?maxx|marshalls|burlington/i,pfc:/CLOTHING/},
+ {id:'household',name:'Household & shopping',spot:'basket',line:/household|cleaning|laundry|supplies|toiletr|diaper|shopping|home goods/i,re:/target|amazon|dollar tree|dollar general|hobby ?lobby|household|bed bath|homegoods|ikea/i,pfc:/GENERAL_MERCHANDISE/},
+ {id:'personal',name:'Personal care',spot:'vanity',line:/personal care|\bhair|salon|barber|beauty|cosmetic|makeup|\bnails?\b/i,re:/great clips|supercuts|sport clips|ulta|sephora|salon|barber/i,pfc:/HAIR_AND_BEAUTY/},
+ {id:'fitness',name:'Fitness',spot:'yoga',line:/\bgym\b|fitness|yoga|workout|climbing|pilates/i,re:/\bgym\b|fitness|planet fit|ymca|yoga|crossfit|orangetheory|peloton/i,pfc:/GYMS/},
+ {id:'pets',name:'Pets',spot:'doghouse',line:/\bpets?\b|\bdogs?\b|\bcats?\b|\bvet\b|veterinar/i,re:/petco|petsmart|\bvet\b|veterinar|chewy|banfield/i,pfc:/PET/},
+ {id:'home',name:'Home repairs',spot:'shed',line:/repair|maintenance|tools|home improvement|\byard\b|lawn|landscap/i,re:/home depot|lowe'?s|ace hardware|harbor freight|hardware|menards|true value/i,pfc:/HOME_IMPROVEMENT/},
+ {id:'travel',name:'Travel',spot:'bike',line:/travel|vacation|\btrips?\b|hotel|flights?|airfare/i,re:/airlines?|alaska air|delta air|united air|southwest|jetblue|hotel|airbnb|vrbo|expedia|marriott|hilton|hyatt/i,pfc:/TRAVEL/},
+ {id:'fun',name:'Fun money',spot:'bookshelf',line:/\bfun\b|entertain|\bbooks?\b|hobb(y|ies)|\bwants\b|\bgames?\b|movies?|spending money|free money|blow money|allowance/i,re:/barnes|bookstore|movie|theater|theatre|cinema|steam games|\bgames?\b|regal|\bamc\b/i,pfc:/ENTERTAINMENT/},
+ {id:'giving',name:'Giving',spot:'table',line:/\bgifts?\b|giving|charity|church|tithe|donat|bless|offering/i,re:/church|donation|charity|united way|red cross|gofundme/i,pfc:/DONATIONS/}];
+const SETBY={};SET.forEach(c=>SETBY[c.id]=c);
+const catName=id=>SETBY[id]?SETBY[id].name:'Custom';
+/* Which set category a budget line (and its category column, if any) belongs to. A line that clearly lists several
+   different kinds of spending ("General (Gas, Groceries, Home)") stays custom instead of being forced into one. */
+function catOf(name,col=''){const n=String(name).trim().toLowerCase(),c=String(col).trim().toLowerCase();if(c==='custom')return null;
+ const ex=SET.find(x=>x.name.toLowerCase()===n||x.id===n)||SET.find(x=>x.name.toLowerCase()===c);if(ex)return ex.id;
+ const pick=list=>{const l=list.length>1?list.filter(x=>x.id!=='insurance'&&x.id!=='debt'):list,use=l.length?l:list;if(!use.length)return undefined;
+  if(use.length>1&&/[,\/+]|\(|&|\band\b/.test(name))return null;return use[0].id};
+ for(const list of [SET.filter(x=>x.line.test(name)),SET.filter(x=>x.re.test(name)),c?SET.filter(x=>x.line.test(col)):[]]){const r=pick(list);if(r!==undefined)return r}
+ return null}
+const pfcOf=code=>{const c=String(code||'').toUpperCase().replace(/[\s>\/-]+/g,'_');if(!/^[A-Z_]+$/.test(c)||!c.includes('_'))return null;const x=SET.find(x=>x.pfc&&x.pfc.test(c));return x?x.id:null};
+/* fold one category into another: budgets and spending add up, transactions and remembered choices follow */
+function mergeInto(st,src,dst){const r2=v=>Math.round(v*100)/100;if(!dst.lines)dst.lines=[{name:dst.name,budget:dst.budget}];
+ dst.lines.push(...(src.lines||[{name:src.name,budget:src.budget}]));dst.budget=r2(dst.budget+src.budget);dst.a=dst.a.map((v,i)=>r2(v+(src.a[i]||0)));if(!dst.spot)dst.spot=src.spot;
+ for(const m in st.tx||{})for(const t of st.tx[m]||[])if(t.bill===src.id)t.bill=dst.id;
+ for(const k in st.rules||{})if(st.rules[k].t==='bill'&&st.rules[k].id===src.id)st.rules[k].id=dst.id}
+/* older saved budgets (free-text categories) are matched to the set list once */
+function migrate(st){if(!st.rules)st.rules={};const out=[];
+ for(const b of st.bills){if(!(SETBY[b.cat]||b.cat==='custom'))b.cat=catOf(b.name)||'custom';
+  const dup=b.cat!=='custom'&&out.find(x=>x.cat===b.cat);if(dup)mergeInto(st,b,dup);else out.push(b)}
+ st.bills=out;return st}
 const SAMPLE={
  income:[5300,5300,5300],open0:600,tx:{},
  bills:[
-  {id:'mortgage',name:'Mortgage',cat:'Housing',budget:1320,a:[1320,1320,1320],due:'the 1st',note:'Escrow covers property taxes and homeowners insurance.',spot:'mailbox'},
-  {id:'groceries',name:'Groceries',cat:'Food',budget:1000,a:[962,1048,1115],due:'weekly',note:'Thanksgiving week pushed November over.',spot:'fridge'},
-  {id:'fuel',name:'Gas for the car',cat:'Transportation',budget:260,a:[241,276,228],due:'as needed',note:'Fewer weekend drives once the weather turned.',spot:'gascan'},
-  {id:'autoins',name:'Car insurance',cat:'Transportation',budget:118,a:[118,118,118],due:'the 12th',note:'Worth comparing quotes once a year.',spot:'car'},
-  {id:'electric',name:'Electricity',cat:'Utilities',budget:140,a:[96,118,162],due:'the 18th',note:'Shorter days mean more lights on.',spot:'lamp'},
-  {id:'natgas',name:'Natural gas',cat:'Utilities',budget:80,a:[28,64,109],due:'the 20th',note:'The furnace kicked on in October.',spot:'stove'},
-  {id:'water',name:'Water & sewer',cat:'Utilities',budget:95,a:[102,91,88],due:'the 25th',note:'Sprinklers are off for the season.',spot:'sink'},
-  {id:'internet',name:'Internet',cat:'Utilities',budget:70,a:[70,70,70],due:'the 5th',note:'Same price as last year.',spot:'router'},
-  {id:'phones',name:'Phone plan',cat:'Utilities',budget:90,a:[90,90,92],due:'the 9th',note:'A small fee increase started in November.',spot:'phone'},
-  {id:'streaming',name:'Streaming',cat:'Subscriptions',budget:24,a:[24,24,31],due:'the 14th',note:'One service raised its price in November.',spot:'tv'},
-  {id:'health',name:'Health insurance',cat:'Insurance',budget:640,a:[640,640,640],due:'the 1st',note:'Open enrollment is a good time to compare plans.',spot:'medcab'},
-  {id:'kids',name:'Kids’ activities',cat:'Family',budget:85,a:[120,85,60],due:'varies',note:'Soccer registration landed in September.',spot:'toychest'},
-  {id:'household',name:'Household goods',cat:'Home',budget:120,a:[134,108,126],due:'as needed',note:'Soap, paper towels, diapers and the rest.',spot:'basket'},
-  {id:'fun',name:'Fun money',cat:'Wants',budget:200,a:[185,212,160],due:'monthly',note:'Books, dates and little treats.',spot:'bookshelf'}
+  {id:'mortgage',name:'Mortgage',cat:'housing',budget:1320,a:[1320,1320,1320],due:'the 1st',note:'Escrow covers property taxes and homeowners insurance.',spot:'mailbox'},
+  {id:'groceries',name:'Groceries',cat:'groceries',budget:1000,a:[962,1048,1115],due:'weekly',note:'Thanksgiving week pushed November over.',spot:'fridge'},
+  {id:'fuel',name:'Gas for the car',cat:'fuel',budget:260,a:[241,276,228],due:'as needed',note:'Fewer weekend drives once the weather turned.',spot:'gascan'},
+  {id:'autoins',name:'Car insurance',cat:'car',budget:118,a:[118,118,118],due:'the 12th',note:'Worth comparing quotes once a year.',spot:'car'},
+  {id:'electric',name:'Electricity',cat:'electric',budget:140,a:[96,118,162],due:'the 18th',note:'Shorter days mean more lights on.',spot:'lamp'},
+  {id:'natgas',name:'Natural gas',cat:'heat',budget:80,a:[28,64,109],due:'the 20th',note:'The furnace kicked on in October.',spot:'stove'},
+  {id:'water',name:'Water & sewer',cat:'water',budget:95,a:[102,91,88],due:'the 25th',note:'Sprinklers are off for the season.',spot:'sink'},
+  {id:'internet',name:'Internet',cat:'internet',budget:70,a:[70,70,70],due:'the 5th',note:'Same price as last year.',spot:'router'},
+  {id:'phones',name:'Phone plan',cat:'phone',budget:90,a:[90,90,92],due:'the 9th',note:'A small fee increase started in November.',spot:'phone'},
+  {id:'streaming',name:'Streaming',cat:'subscriptions',budget:24,a:[24,24,31],due:'the 14th',note:'One service raised its price in November.',spot:'tv'},
+  {id:'health',name:'Health insurance',cat:'health',budget:640,a:[640,640,640],due:'the 1st',note:'Open enrollment is a good time to compare plans.',spot:'medcab'},
+  {id:'kids',name:'Kids’ activities',cat:'kids',budget:85,a:[120,85,60],due:'varies',note:'Soccer registration landed in September.',spot:'toychest'},
+  {id:'household',name:'Household goods',cat:'household',budget:120,a:[134,108,126],due:'as needed',note:'Soap, paper towels, diapers and the rest.',spot:'basket'},
+  {id:'fun',name:'Fun money',cat:'fun',budget:200,a:[185,212,160],due:'monthly',note:'Books, dates and little treats.',spot:'bookshelf'}
  ],
  tank:{name:'Emergency fund',goal:10000,start:3800,target:400,a:[400,250,450],account:'Emergency savings ••4821'},
  goals:[
@@ -194,7 +244,7 @@ const GOAL_LOOK=[
  {icon:'tent',plant:'sunflower',color:'#b4e09f',ink:'#2d5a24'},
  {icon:'gift',plant:'pine',color:'#f7b3c8',ink:'#7b2346'},
  {icon:'bike',plant:'tulip',color:'#ffd978',ink:'#6e4210'}];
-/* Private budget behind five quick taps on the Sample budget tag: the exact state the site's own importer produced from Jordan's budget CSV and statement CSV. Strip with tools/make_public.py before copying to the public repo. */
+/* Private budget behind five quick taps on the Sample budget tag: the exact state the site's own importer produced from Jordan's budget CSV and statement CSV (set categories first, then custom). Strip with tools/make_public.py before copying to the public repo. */
 const SECRET=/*SECRET-START*/null/*SECRET-END*/;
 const KEY='budget-house-v3';
 const clone=o=>JSON.parse(JSON.stringify(o));
@@ -214,6 +264,7 @@ const seeds=(g,m)=>plantsFor(g,balance(g,m));
 const startBal=(g,m)=>m>0?balance(g,m-1):g.start;
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const uid=()=>'b'+Math.random().toString(36).slice(2,8);
+migrate(S);
 
 /* ---------- Renderer, camera, light ---------- */
 const canvas=document.getElementById('c');
@@ -222,8 +273,8 @@ const coarse=matchMedia('(pointer: coarse)').matches;renderer.setPixelRatio(Math
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();document.getElementById('lost').style.display='grid'});canvas.addEventListener('webglcontextrestored',()=>location.reload());
 const scene=new THREE.Scene();
-const cam=new THREE.OrthographicCamera(-1,1,1,-1,0.1,240);
-const OFF=new THREE.Vector3(34,30,34);
+const cam=new THREE.OrthographicCamera(-1,1,1,-1,1,420);
+const OFF=new THREE.Vector3(102,90,102);/* far back so the forest in front of the lot isn't clipped; the view is orthographic, so distance doesn't change the picture */
 const HOME=new THREE.Vector3(0,2.2,-0.5);
 const focus=HOME.clone(),focusGoal=HOME.clone();
 let zoom=1,zoomGoal=1,baseZoom=1,halfH=20;
@@ -260,7 +311,6 @@ function floor(w,d,x,z,c1,c2,cell=0.8){const m=c2?new THREE.MeshStandardMaterial
 function disc(p,r,c,x,y,z){const d=new THREE.Mesh(new THREE.CircleGeometry(r,40),M(c));d.rotation.x=-Math.PI/2;d.position.set(x,y,z);d.receiveShadow=true;p.add(d);return d}
 
 /* ---------- Diorama base ---------- */
-box(world,35,1.7,29.4,'#cdc2e8',0,-1.7,0.2,0.6);
 box(world,16.8,0.25,11.1,'#c2e2aa',-8.95,0,8.85,0.05);
 box(world,17.4,0.25,28.8,'#b6dca1',8.15,0,0.2,0.05);
 box(world,16,0.3,16.3,'#ebbd95',-8.5,0,-4.9,0.05);
@@ -284,6 +334,28 @@ function win(x,y,w,h){box(world,w+0.4,h+0.4,0.18,'#ffffff',x,y-0.2,-12.98,0.1);b
 win(-7.75,3.0,2.6,2.0);win(-13.0,3.9,1.8,1.4);
 box(world,0.8,2.6,0.26,'#d8c6f4',-9.6,2.5,-12.78,0.13);box(world,0.8,2.6,0.26,'#d8c6f4',-5.9,2.5,-12.78,0.13);box(world,4.0,0.1,0.1,'#fffaf3',-7.75,5.2,-12.8,0.04);
 [[-9.4,'#f7a6bf'],[-7.0,'#a6cff2']].forEach(([z,c])=>{box(world,0.12,1.4,1.1,'#ffffff',-16.45,3.2,z,0.05);box(world,0.06,1.1,0.8,c,-16.37,3.35,z,0.02)});
+
+/* ---------- Evergreen forest around the lot ---------- */
+{const fl=new THREE.Mesh(new THREE.CircleGeometry(150,48),M('#a9cf9b'));fl.rotation.x=-Math.PI/2;fl.position.y=0.01;fl.receiveShadow=true;world.add(fl);
+ const merge=list=>{const pos=[],nor=[];for(const g0 of list){const g=g0.index?g0.toNonIndexed():g0;pos.push(...g.attributes.position.array);nor.push(...g.attributes.normal.array)}
+  const o=new THREE.BufferGeometry();o.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));o.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));return o};
+ const tier=(r,h,y)=>{const g=new THREE.ConeGeometry(r,h,7);g.translate(0,y,0);return g};
+ const crown=merge([tier(1.25,1.7,1.45),tier(0.98,1.5,2.35),tier(0.66,1.3,3.15)]);crown.computeVertexNormals();
+ const trunkG=new THREE.CylinderGeometry(0.16,0.22,0.9,6);trunkG.translate(0,0.45,0);
+ let sd=4242;const r=()=>(sd=(sd*16807)%2147483647)/2147483647;
+ const X0=-17.6,X1=17.4,Z0=-14.7,Z1=14.9,pts=[];
+ for(let x=-96;x<=96;x+=2.5)for(let z=-96;z<=96;z+=2.5){const px=x+(r()-0.5)*2.2,pz=z+(r()-0.5)*2.2;
+  const dx=Math.max(X0-px,0,px-X1),dz=Math.max(Z0-pz,0,pz-Z1),d=Math.hypot(dx,dz);if(d<=0)continue;
+  const sc=0.75+r()*0.75+Math.min(d,30)/60,h=3.6*sc;
+  /* trees toward the viewer (including after a full turn of the view) stand back far enough not to hide the yard */
+  const th=Math.atan2(pz,px),front=Math.max(...[-0.8,0,0.8].map(a=>Math.cos(th-Math.PI/4+a)));
+  if(d<1.4+Math.max(0,front+0.25)*1.3*h)continue;if(Math.hypot(px,pz)>98)continue;if(r()<0.12)continue;pts.push([px,pz,sc,r()*6.28])}
+ const crM=new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.9,flatShading:true}),trM=M('#b48663');
+ const crI=new THREE.InstancedMesh(crown,crM,pts.length),trI=new THREE.InstancedMesh(trunkG,trM,pts.length);
+ const GREENS=['#5f9f7a','#6dab83','#7fb98e','#4f8f72','#88c29a','#5a9a86'].map(c=>new THREE.Color(c)),mx=new THREE.Matrix4(),q=new THREE.Quaternion(),up=new THREE.Vector3(0,1,0),v=new THREE.Vector3(),sv=new THREE.Vector3();
+ pts.forEach(([x,z,sc,rot],i)=>{q.setFromAxisAngle(up,rot);sv.set(sc,sc*(0.9+((i*7)%5)*0.06),sc);mx.compose(v.set(x,0.01,z),q,sv);crI.setMatrixAt(i,mx);trI.setMatrixAt(i,mx);crI.setColorAt(i,GREENS[(i*13)%GREENS.length])});
+ crI.instanceColor.needsUpdate=true;crI.receiveShadow=true;world.add(crI);world.add(trI)}
+scene.fog=new THREE.Fog(0xe9dcec,240,345);
 
 /* ---------- Spots: every object can hold a bill ---------- */
 const hot=[],targets=[],SPOTS={};
@@ -529,7 +601,7 @@ function buildGarden(){const shared=new Set(Object.values(matCache)),sharedG=new
  gardenTargets();snapGarden();S.goals.forEach((g,i)=>packetDraw(i,month))}
 /* tapping the Sample budget tag five times quickly loads the private budget */
 {let taps=[];document.getElementById('sampleTag').addEventListener('click',()=>{const now=Date.now();taps=taps.filter(t=>now-t<2500);taps.push(now);if(taps.length>=5){taps=[];loadSecret()}})}
-function loadSecret(){if(!SECRET)return;if(anim)stopAnim();S=clone(SECRET);if(!S.rules)S.rules={};edited=true;save(true);buildGarden();month=1;applyMonth(false);selected=null;flyTo(null);budgetTab='overview';open({t:'budget'})}
+function loadSecret(){if(!SECRET)return;if(anim)stopAnim();S=migrate(clone(SECRET));if(!S.rules)S.rules={};edited=true;save(true);buildGarden();month=1;applyMonth(false);selected=null;flyTo(null);budgetTab='overview';open({t:'budget'})}
 function addGoalRow(){if(S.goals.length>=6)return false;S.goals.push({name:'New goal',goal:1000,start:0,target:50,a:[0,0,0],account:''});buildGarden();save(true);applyMonth(false);return true}
 function hoeAddRow(){if(anim)stopAnim();if(!addGoalRow())return;selected=null;flyTo(null);budgetTab='edit';open({t:'budget'});
  const ins=sheet.querySelectorAll('[data-ed=gname]'),last=ins[ins.length-1];if(last){last.scrollIntoView({block:'center'});last.focus({preventScroll:true});last.select()}}
@@ -698,6 +770,7 @@ const flies=[];
 
 /* ---------- State → scene ---------- */
 const byId={};hot.forEach(h=>byId[h.id]=h);
+SET.forEach(c=>{const h=SPOTS[c.spot];if(h){h.home=c.id;if(h.suggest)h.suggest=c.name}});
 buildGarden();
 const billAt=sid=>S.bills.find(b=>b.spot===sid);
 const billById=id=>S.bills.find(b=>b.id===id);
@@ -723,29 +796,33 @@ mEl.addEventListener('click',e=>{const b=e.target.closest('button');if(b){if(ani
 const sheet=document.getElementById('sheet');let view=null,selected=null,budgetTab='overview',uploadMsg='';
 const PAL=['#b9a7ea','#f7a6bf','#a6cff2','#ffd76e','#f6b48f','#bfe4d6','#d8c6f4','#ffc8a2','#9fd8c0','#f59ab5','#c3d7f5','#e7c6a2','#cde7a6','#f3b6e0','#a9c6e8','#f2d49b'];
 const spotOpts=sel=>Object.values(SPOTS).map(h=>{const b=billAt(h.id);return `<option value="${h.id}" ${h.id===sel?'selected':''}>${esc(h.room)} · ${esc(h.label)}${b&&h.id!==sel?' (has '+esc(b.name)+')':''}</option>`}).join('');
-const catOpts=sel=>CATS.map(c=>`<option ${c===sel?'selected':''}>${c}</option>`).join('');
+const catOpts=sel=>`<optgroup label="Set categories">${SET.map(c=>{const o=billOfCat(c.id);return `<option value="${c.id}" ${c.id===sel?'selected':''}>${esc(c.name)}${o&&c.id!==sel?' (combine with '+esc(o.name)+')':''}</option>`}).join('')}</optgroup><option value="custom" ${sel==='custom'?'selected':''}>Custom category</option>`;
+const freeOpts=sel=>Object.values(SPOTS).filter(h=>h.id===sel||!billAt(h.id)).map(h=>`<option value="${h.id}" ${h.id===sel?'selected':''}>${esc(h.room)} · ${esc(h.label)}${h.home&&!billOfCat(h.home)?'':''}</option>`).join('');
+function homelessHTML(){const hl=S.bills.filter(b=>!b.spot||!SPOTS[b.spot]);return hl.length?`<div class="note" style="background:#f3eefc"><b>${hl.length} categor${hl.length===1?'y needs':'ies need'} a spot in the house.</b> Tap ${hl.length===1?'it':'one'} to choose an empty object: ${hl.map(b=>`<button class="btn sm ghost" style="min-height:36px;margin:6px 6px 0 0;background:#fff" data-pick="${b.id}">${esc(b.name)}</button>`).join('')}</div>`:''}
+const linesHTML=b=>(b.lines&&(b.lines.length>1||b.lines[0].name!==b.name)?`<p class="sub" style="margin-top:8px;grid-column:1 / -1">From your budget: ${b.lines.map(l=>`${esc(l.name)} ${fmt(l.budget)}`).join(' · ')}</p>`:'')+
+ (coversOf(b).length?`<p class="sub" style="margin-top:8px;grid-column:1 / -1">Collects purchases of ${coversOf(b).filter(id=>!billOfCat(id)).map(id=>esc(SETBY[id].name)).join(' and ')||'nothing yet (those categories have their own spots)'}.</p>`:'');
 function histHTML(arr,cur){const mx=Math.max(...arr,1);return `<div class="hist">${arr.map((v,i)=>`<div class="${i===cur?'cur':''}"><em>${fmt(v)}</em><i style="height:${Math.max(6,v/mx*70)}px"></i>${MONTHS[i]}</div>`).join('')}</div>`}
 const head=tag=>`<div class="sh-top"><span class="tag">${tag}</span><button class="x" data-act="close" aria-label="Close">×</button></div>`;
-function vBill(b){const v=b.a[month],d=v-b.budget,over=d>0,h=SPOTS[b.spot];
- return `${head(esc(b.cat))}<h2>${esc(b.name)}</h2><p class="where">${h?esc(h.room)+' · '+esc(h.label):'Not placed in the house'}${b.due?' · due '+esc(b.due):''}</p>
+function vBill(b){const v=b.a[month],d=v-b.budget,over=d>0,h=SPOTS[b.spot],cu=b.cat==='custom';
+ return `${head(cu?'Custom category':'Set category')}<h2>${esc(b.name)}</h2><p class="where">${h?esc(h.room)+' · '+esc(h.label):'<b>Needs a spot in the house</b>: choose one under “Lives in” below'}${b.due?' · due '+esc(b.due):''}</p>
  <div class="big"><b>${fmt(v)}</b><span class="pill ${over?'over':'ok'}">${d===0?'Right on budget':over?fmt(d)+' over budget':fmt(-d)+' under budget'}</span></div>
  <div class="meter ${over?'over':''}"><i style="width:${b.budget?Math.min(100,v/b.budget*100):100}%"></i></div>
- <p class="sub">Budget ${fmt(b.budget)} a month · ${S.income[month]?(v/S.income[month]*100).toFixed(1):0}% of take-home pay</p>
+ <p class="sub">Budget ${fmt(b.budget)} a month · ${S.income[month]?(v/S.income[month]*100).toFixed(1):0}% of take-home pay</p>${linesHTML(b)}
  ${histHTML(b.a,month)}${b.note?`<p class="note">${esc(b.note)}</p>`:''}
- <details class="edit"><summary>Edit this bill</summary>
+ <details class="edit" ${h?'':'open'}><summary>Edit this category</summary>
   <label class="f">Name<input type="text" id="e-name" value="${esc(b.name)}"></label>
   <div class="grid2" style="margin-top:10px"><label class="f">Monthly budget<input type="number" inputmode="decimal" id="e-budget" value="${b.budget}"></label><label class="f">Spent in ${MONTHS[month]}<input type="number" inputmode="decimal" id="e-spent" value="${v}"></label></div>
   <div class="grid2" style="margin-top:10px"><label class="f">Category<select id="e-cat">${catOpts(b.cat)}</select></label><label class="f">Lives in<select id="e-spot"><option value="">Not in the house</option>${spotOpts(b.spot)}</select></label></div>
-  <div class="actions"><button class="btn sm" data-act="saveBill" data-id="${b.id}">Save</button><button class="btn sm danger" data-act="delBill" data-id="${b.id}">Delete bill</button></div>
+  <div class="actions"><button class="btn sm" data-act="saveBill" data-id="${b.id}">Save</button><button class="btn sm danger" data-act="delBill" data-id="${b.id}">Delete category</button></div>
  </details>`}
-function vSpot(h){const others=S.bills.filter(b=>b.spot!==h.id);
- return `${head(esc(h.room))}<h2>${esc(h.label)}</h2><p class="where">${h.suggest?`Idea: track <b>${esc(h.suggest)}</b> here.`:'Nothing is billed here yet.'}</p>
- <h3>Add a new bill here</h3>
- <label class="f">Name<input type="text" id="n-name" value="${esc(h.suggest||'')}" placeholder="e.g. ${esc(h.label)} costs"></label>
+function vSpot(h){const home=h.home&&SETBY[h.home],homeFree=home&&!billOfCat(home.id),movable=S.bills.filter(b=>b.spot!==h.id).sort((a,b)=>(a.spot?1:0)-(b.spot?1:0));
+ return `${head(esc(h.room))}<h2>${esc(h.label)}</h2><p class="where">${home?(homeFree?`This is the home of the set category <b>${esc(home.name)}</b>, which isn’t in your budget yet.`:`${esc(home.name)} lives somewhere else, so this spot is free.`):'A free spot for a custom category.'}</p>
+ ${homeFree?`<h3>Add ${esc(home.name)}</h3><div class="grid2"><label class="f">Monthly budget<input type="number" inputmode="decimal" id="h-budget" placeholder="0"></label><div class="actions" style="margin:0;align-self:end"><button class="btn sm" data-act="addSetHere" data-spot="${h.id}" data-cat="${home.id}">Add ${esc(home.name)}</button></div></div>`:''}
+ <h3>${homeFree?'Or make':'Make'} a custom category here</h3>
+ <label class="f">Name<input type="text" id="n-name" placeholder="e.g. Babysitting, Hosting, Music lessons"></label>
  <div class="grid2" style="margin-top:10px"><label class="f">Monthly budget<input type="number" inputmode="decimal" id="n-budget" placeholder="0"></label><label class="f">Spent in ${MONTHS[month]}<input type="number" inputmode="decimal" id="n-spent" placeholder="Same as budget"></label></div>
- <label class="f" style="margin-top:10px">Category<select id="n-cat">${catOpts(h.cat||'Other')}</select></label>
- <div class="actions"><button class="btn sm" data-act="addHere" data-spot="${h.id}">Add bill</button></div>
- ${others.length?`<h3>Or move an existing bill here</h3><div class="grid2"><select id="m-bill" aria-label="Bill to move">${others.map(b=>`<option value="${b.id}">${esc(b.name)}${b.spot&&SPOTS[b.spot]?' (in '+esc(SPOTS[b.spot].label)+')':''}</option>`).join('')}</select><button class="btn sm ghost" data-act="moveHere" data-spot="${h.id}">Move here</button></div>`:''}`}
+ <div class="actions"><button class="btn sm" data-act="addHere" data-spot="${h.id}">Add custom category</button></div>
+ ${movable.length?`<h3>Or move a category here</h3><div class="grid2"><select id="m-bill" aria-label="Category to move">${movable.map(b=>`<option value="${b.id}">${esc(b.name)}${b.spot&&SPOTS[b.spot]?' (in '+esc(SPOTS[b.spot].label)+')':' (needs a spot)'}</option>`).join('')}</select><button class="btn sm ghost" data-act="moveHere" data-spot="${h.id}">Move here</button></div>`:''}`}
 function vGoal(h){const tank=h.kind==='tank',g=tank?S.tank:S.goals[h.gi],v=g.a[month],bal=balance(g,month),met=v>=g.target,left=Math.max(0,g.goal-bal),mo=g.target>0?Math.ceil(left/g.target):0;
  const where=tank?`The water tower · ${g.goal?Math.round(bal/g.goal*100):0}% full`:`Garden row ${h.gi+1} · ${seeds(g,month)} of ${SLOTS} plants · each plant is 10% of the goal${gardener.row===h.gi?' · the gardener is working here':''}`;
  return `${head(tank?'Safety net':'Savings goal')}<h2>${esc(g.name)}</h2><p class="where">${where}${g.account?' · '+esc(g.account):''}</p>
@@ -767,18 +844,20 @@ function vPile(){const st=monthStats(month),sm=k=>st.tx.filter(x=>x.k===k).reduc
 let sortRemember=true,sortNew=null;
 function groupsFor(m){const g={};for(const t of S.tx[m]||[]){if(t.k==='xfer'&&!String(t.key).startsWith('TRANSFER TO'))continue;const id=t.key;(g[id]=g[id]||{key:id,tx:[],k:t.k,bill:t.bill,goal:t.goal,hint:t.hint,how:t.how}).tx.push(t)}
  return Object.values(g).map(x=>Object.assign(x,{total:x.tx.reduce((s,t)=>s+t.amt,0)})).sort((a,b)=>b.total-a.total)}
-function targetOpts(cur,hint){const H=hint&&KINDS[hint];
- return `<option value="">Choose…</option><optgroup label="Bills">${S.bills.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(b=>`<option value="b:${b.id}" ${cur==='b:'+b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</optgroup>
+function targetOpts(cur,hint){const H=hint&&SETBY[hint]&&!billOfCat(hint)?SETBY[hint]:null,unused=SET.filter(c=>!billOfCat(c.id)&&c!==H);
+ return `<option value="">Choose…</option>${H?`<option value="s:${H.id}">+ Add set category: ${esc(H.name)}</option>`:''}<optgroup label="Your categories">${S.bills.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(b=>`<option value="b:${b.id}" ${cur==='b:'+b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</optgroup>
  <optgroup label="Savings"><option value="g:tank" ${cur==='g:tank'?'selected':''}>${esc(S.tank.name)} (water tower)</option>${S.goals.map((g,i)=>`<option value="g:goal${i}" ${cur==='g:goal'+i?'selected':''}>${esc(g.name)}</option>`).join('')}</optgroup>
- <optgroup label="Other"><option value="new">+ New bill${H?`: ${esc(H.label)}`:''}…</option><option value="i:income" ${cur==='i:income'?'selected':''}>Money coming in (refund, deposit)</option><option value="i:ignore" ${cur==='i:ignore'?'selected':''}>Ignore (moved between my accounts)</option></optgroup>`}
+ <optgroup label="Add a set category">${unused.map(c=>`<option value="s:${c.id}">${esc(c.name)}</option>`).join('')}</optgroup>
+ <optgroup label="Other"><option value="new">+ New custom category…</option><option value="i:income" ${cur==='i:income'?'selected':''}>Money coming in (refund, deposit)</option><option value="i:ignore" ${cur==='i:ignore'?'selected':''}>Ignore (moved between my accounts)</option></optgroup>`}
 const curOf=x=>x.k==='out'&&x.bill?'b:'+x.bill:x.k==='save'?'g:'+x.goal:x.k==='in'?'i:income':(x.k==='ignore'||x.k==='xfer')?'i:ignore':'';
 function sortRow(x){const n=x.tx.length,days=[...new Set(x.tx.map(t=>t.d))].slice(0,4).join(', ');
- const ex=x.tx[0].desc;const newOpen=sortNew===x.key,H=x.hint&&KINDS[x.hint];
+ const ex=x.tx[0].desc;const newOpen=sortNew===x.key,fs=freeSpots();
  return `<div class="erow" style="grid-template-columns:minmax(0,1fr) auto"><div><b>${esc(prettyKey(x.key))}</b><br><small style="color:var(--soft)">${n} × · ${fmt(x.total)} · day ${days}${n>4?'…':''}</small><br><small style="color:var(--soft);overflow-wrap:anywhere">${esc(ex)}</small></div>
   <b style="white-space:nowrap">${fmt(x.total)}</b>
   <label class="f wide" style="grid-column:1 / -1">Goes to<select data-sortkey="${esc(x.key)}">${targetOpts(curOf(x),x.hint)}</select></label>
-  ${newOpen?`<div class="wide grid2" style="grid-column:1 / -1"><label class="f">New bill name<input type="text" id="nb-name" value="${esc(H?H.label:prettyKey(x.key))}"></label><label class="f">Monthly budget<input type="number" inputmode="decimal" id="nb-budget" value="${Math.round(x.total)}"></label></div>
-   <div class="actions" style="grid-column:1 / -1;margin-top:4px"><button class="btn sm" data-act="newBillFor" data-key="${esc(x.key)}">Add bill and sort</button><button class="btn sm ghost" data-act="cancelNew">Cancel</button></div>`:''}</div>`}
+  ${newOpen?`<div class="wide grid2" style="grid-column:1 / -1"><label class="f">Custom category name<input type="text" id="nb-name" value="${esc(prettyKey(x.key))}"></label><label class="f">Monthly budget<input type="number" inputmode="decimal" id="nb-budget" value="${Math.round(x.total)}"></label></div>
+   <label class="f" style="grid-column:1 / -1">Lives in<select id="nb-spot">${fs.map(id=>`<option value="${id}">${esc(SPOTS[id].room)} · ${esc(SPOTS[id].label)}</option>`).join('')}<option value="">Not in the house yet</option></select></label>
+   <div class="actions" style="grid-column:1 / -1;margin-top:4px"><button class="btn sm" data-act="newBillFor" data-key="${esc(x.key)}">Add category and sort</button><button class="btn sm ghost" data-act="cancelNew">Cancel</button></div>`:''}</div>`}
 function vSort(){const gs=groupsFor(month),need=gs.filter(x=>x.k==='out'&&!x.bill),xf=gs.filter(x=>x.k==='xfer'),auto=gs.filter(x=>!(x.k==='out'&&!x.bill)&&x.k!=='xfer');
  return `<p class="sub" style="margin-top:12px">Pick where each merchant’s spending belongs. Every purchase from that merchant this month moves together.</p>
  <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-size:15px"><input type="checkbox" id="sortRemember" ${sortRemember?'checked':''} style="width:20px;height:20px"> Remember my choices for future uploads</label>
@@ -796,7 +875,7 @@ function vBudget(){const hasTx=Array.isArray(S.tx[month])&&S.tx[month].length;if
  if(budgetTab==='overview'){const {inc,items,sav,used,left}=segments(),base=Math.max(inc,used)||1;
   const segs=[...items,...sav].filter(x=>x.v>0).map(x=>{const p=x.v/base*100;return `<div class="seg" data-pick="${x.id}" style="width:${p}%;background:${x.c}" title="${esc(x.name)} ${fmt(x.v)}">${p>=7&&inc?Math.round(x.v/inc*100)+'%':''}</div>`}).join('')+(left>0?`<div class="seg left" style="width:${left/base*100}%" title="Left over">${left/base>=0.07?Math.round(left/inc*100)+'%':''}</div>`:'');
   const row=x=>`<button class="lg" data-pick="${x.id}"><span class="d" style="background:${x.c}"></span><span>${esc(x.name)}${x.over?`<small>${fmt(x.over)} over</small>`:''}</span><b>${fmt(x.v)}</b><em>${inc?(x.v/inc*100).toFixed(1):'0.0'}%</em></button>`;
-  body=`<p class="sub" style="margin-top:12px">The bar is 100% of ${fmt(inc)} take-home pay in ${MONTHS[month]}. Each tick marks 10%.</p>
+  body=`${homelessHTML()}<p class="sub" style="margin-top:12px">The bar is 100% of ${fmt(inc)} take-home pay in ${MONTHS[month]}. Each tick marks 10%.</p>
   <div class="money"><div class="track">${segs}</div><div class="ticks">${'<i></i>'.repeat(10)}</div><div class="tickl"><span>0%</span><span>50%</span><span>100%</span></div></div>
   ${left<0?`<p class="warn">Spending and saving come to ${fmt(-left)} more than take-home pay this month.</p>`:''}
   <div class="legend"><h3 style="margin:10px 0 2px">Bills</h3>${items.map(row).join('')}<h3 style="margin:14px 0 2px">Savings</h3>${sav.map(row).join('')}
@@ -805,13 +884,13 @@ function vBudget(){const hasTx=Array.isArray(S.tx[month])&&S.tx[month].length;if
   body=`<p class="sub" style="margin-top:12px">Changes save in this browser and update the house right away. “Spent” is for ${MONTHS[month]}; switch months at the top to edit the others.</p>
   <div class="grid2" style="margin-top:12px"><label class="f">Take-home pay in ${MONTHS[month]}<input type="number" inputmode="decimal" data-ed="income" value="${S.income[month]}"></label>
   <label class="f">Apply pay to<select data-ed="incomeAll"><option value="one">This month only</option><option value="all">All months</option></select></label></div>
-  <h3>Bills</h3>${S.bills.map((b,i)=>`<div class="erow">
+  <h3>Categories</h3><p class="sub">Set categories are the same for every budget; custom ones are yours. Choosing a set category that’s already in use combines the two.</p>${S.bills.map((b,i)=>`<div class="erow">
    <label class="f nm">Name<input type="text" data-ed="name" data-i="${i}" value="${esc(b.name)}"></label>
    <label class="f">Budget<input type="number" inputmode="decimal" data-ed="budget" data-i="${i}" value="${b.budget}"></label>
    <label class="f">Spent<input type="number" inputmode="decimal" data-ed="spent" data-i="${i}" value="${b.a[month]}"></label>
    <button class="del" data-act="delRow" data-i="${i}" aria-label="Delete ${esc(b.name)}">×</button>
-   <label class="f wide">Lives in<select data-ed="spot" data-i="${i}"><option value="">Not in the house</option>${spotOpts(b.spot)}</select></label></div>`).join('')}
-  <div class="actions"><button class="btn sm ghost" data-act="addRow">+ Add bill</button></div>
+   <div class="wide grid2"><label class="f">Category<select data-ed="cat" data-i="${i}">${catOpts(b.cat)}</select></label><label class="f">Lives in<select data-ed="spot" data-i="${i}" ${b.spot?'':'style="border-color:#e8606c"'}><option value="">Needs a spot</option>${spotOpts(b.spot)}</select></label></div>${linesHTML(b)}</div>`).join('')}
+  <div class="actions"><button class="btn sm ghost" data-act="addRow">+ Add custom category</button></div>
   <h3>Savings</h3>${[S.tank,...S.goals].map((g,i)=>`<div class="erow">
    <label class="f nm">${i===0?'Water tower':'Garden row '+i}<input type="text" data-ed="gname" data-g="${i}" value="${esc(g.name)}"></label>
    <label class="f">Target / mo<input type="number" inputmode="decimal" data-ed="gtarget" data-g="${i}" value="${g.target}"></label>
@@ -820,9 +899,9 @@ function vBudget(){const hasTx=Array.isArray(S.tx[month])&&S.tx[month].length;if
   <p class="sub" style="margin-top:10px">When you upload transactions, transfers to a row’s bank account (matched by its name or last four digits) fill that row.</p>
   <div class="actions">${S.goals.length<6?'<button class="btn sm ghost" data-act="addGoal">+ Add garden row</button>':''}<button class="btn sm danger" data-act="reset">Reset to sample budget</button></div>`}
  else if(budgetTab==='sort')body=vSort();
- else{body=`<p class="sub" style="margin-top:12px"><b>Bank transactions</b> (date, description, amount): the month plays back day by day and each purchase lands on a matching object (Safeway → fridge, Shell → gas can, Netflix → TV). <b>A budget</b> (name, category, budget, spent) replaces your bills instead. CSV or JSON.</p>
+ else{body=`<p class="sub" style="margin-top:12px"><b>Bank transactions</b> (date, description, amount): the month plays back day by day and each purchase lands on a matching object (Safeway → fridge, Shell → gas can, Netflix → TV). <b>A budget</b> (name, category, budget, spent) replaces your categories instead: each line is matched to a set category, and anything that doesn’t fit becomes a custom category you place in the house. CSV or JSON.</p>
   <label class="drop" id="drop" style="margin-top:12px"><b style="color:var(--ink)">Choose a file</b><span>or drop it here · .csv or .json</span><input type="file" id="file" accept=".csv,.json,text/csv,application/json" style="position:absolute;opacity:0;width:1px;height:1px"></label>
-  ${uploadMsg?`<p class="msg">${uploadMsg}</p>`:''}
+  ${uploadMsg?`<p class="msg">${uploadMsg}</p>`:''}${homelessHTML()}
   <p class="sub" style="margin-top:10px">Transactions look like <code>2026-11-03,SAFEWAY #1542,-84.12</code>: deposits positive, spending negative. Separate debit and credit columns work too, and transfers mentioning savings or a goal’s name fill that goal.</p>
   <h3>Budget CSV format</h3><p class="sub">Lines with “savings”, “retirement”, “401k”, “IRA” or “investment” in the name become garden rows, and an “emergency fund” line fills the water tower. Total lines and blank amounts are skipped.</p><p class="sub">Columns: <b>name, category, budget, spent</b>. Add a row named “Take-home pay” for income, and rows with category “Savings” for the water tower (“Emergency fund”) and the four garden rows. Here’s your current budget in that format:</p>
   <textarea id="tpl" readonly aria-label="Current budget as CSV">${esc(toCSV())}</textarea>
@@ -853,87 +932,65 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
  if(a==='close')return close();
  if(a==='play')return startAnim();
  if(a==='cancelNew'){sortNew=null;view.keep=true;return render()}
- if(a==='newBillFor'){const key=t.dataset.key,nm=(v('nb-name').value||'').trim().slice(0,60)||prettyKey(key),grp=groupsFor(month).find(x=>x.key===key),H=grp&&grp.hint&&KINDS[grp.hint];
-  const b={id:uid(),name:nm,cat:H?H.cat:'Other',budget:num(v('nb-budget').value),a:[0,0,0],due:'',note:'',spot:null};S.bills.push(b);
-  const pref=H&&SPOTS[H.spot]&&!billAt(H.spot)?H.spot:null;if(pref)b.spot=pref;else autoPlace([b],new Set(S.bills.filter(x=>x.spot).map(x=>x.spot)));
+ if(a==='newBillFor'){const key=t.dataset.key,nm=(v('nb-name').value||'').trim().slice(0,60)||prettyKey(key),sp=v('nb-spot').value;
+  const b={id:uid(),name:nm,cat:'custom',budget:num(v('nb-budget').value),a:[0,0,0],due:'',note:'',spot:null};S.bills.push(b);if(sp&&SPOTS[sp]&&!billAt(sp))b.spot=sp;
   sortNew=null;return sortAssign(key,'b:'+b.id)}
- if(a==='saveBill'){const b=billById(t.dataset.id);b.name=v('e-name').value.trim()||b.name;b.budget=num(v('e-budget').value);b.a[month]=num(v('e-spent').value);b.cat=v('e-cat').value;assign(b,v('e-spot').value||null);save();applyMonth(false);
+ if(a==='addSetHere'){const c=t.dataset.cat;if(billOfCat(c))return;const amt=num(v('h-budget').value);const b={id:uid(),name:SETBY[c].name,cat:c,budget:amt,a:[amt,amt,amt],due:'',note:'',spot:null};S.bills.push(b);assign(b,t.dataset.spot);save(true);applyMonth(false);open({t:'bill',id:b.id})}
+ if(a==='saveBill'){const b=billById(t.dataset.id),sp0=b.a[month];b.name=v('e-name').value.trim()||b.name;b.budget=num(v('e-budget').value);b.a[month]=num(v('e-spent').value);assign(b,v('e-spot').value||null);const nc=v('e-cat').value,dst=nc!=='custom'&&S.bills.find(x=>x.cat===nc&&x!==b);
+  if(dst){mergeInto(S,b,dst);S.bills=S.bills.filter(x=>x!==b);save(true);applyMonth(false);if(dst.spot){selected=SPOTS[dst.spot];flyTo(selected)}return open({t:'bill',id:dst.id})}b.cat=nc;if(nc!=='custom'&&!b.spot)placeSet(b);save(b.a[month]===sp0);applyMonth(false);
   if(b.spot){selected=SPOTS[b.spot];flyTo(selected)}else selected=null;view.keep=true;render()}
- if(a==='delBill'){S.bills=S.bills.filter(b=>b.id!==t.dataset.id);save();applyMonth(false);close()}
+ if(a==='delBill'){S.bills=S.bills.filter(b=>b.id!==t.dataset.id);for(const m in S.tx)recompute(+m);save(true);applyMonth(false);close()}
  if(a==='addHere'){const nm=v('n-name').value.trim();if(!nm){v('n-name').focus();return}const amt=num(v('n-budget').value),sp=v('n-spent').value===''?amt:num(v('n-spent').value);
-  const b={id:uid(),name:nm.slice(0,60),cat:v('n-cat').value,budget:amt,a:[sp,sp,sp],due:'',note:'',spot:null};S.bills.push(b);assign(b,t.dataset.spot);save();applyMonth(false);open({t:'bill',id:b.id})}
- if(a==='moveHere'){const b=billById(v('m-bill').value);if(b){assign(b,t.dataset.spot);save();applyMonth(false);open({t:'bill',id:b.id})}}
- if(a==='addRow'){S.bills.push({id:uid(),name:'New bill',cat:'Other',budget:0,a:[0,0,0],due:'',note:'',spot:null});save();applyMonth(false);view.keep=true;render();const ins=sheet.querySelectorAll('[data-ed=name]');const last=ins[ins.length-1];if(last){last.focus();last.select()}}
- if(a==='delRow'){S.bills.splice(+t.dataset.i,1);save();applyMonth(false);view.keep=true;render()}
+  const b={id:uid(),name:nm.slice(0,60),cat:catOf(nm)&&!billOfCat(catOf(nm))?catOf(nm):'custom',budget:amt,a:[sp,sp,sp],due:'',note:'',spot:null};S.bills.push(b);assign(b,t.dataset.spot);save(true);applyMonth(false);open({t:'bill',id:b.id})}
+ if(a==='moveHere'){const b=billById(v('m-bill').value);if(b){assign(b,t.dataset.spot);save(true);applyMonth(false);open({t:'bill',id:b.id})}}
+ if(a==='addRow'){S.bills.push({id:uid(),name:'New category',cat:'custom',budget:0,a:[0,0,0],due:'',note:'',spot:null});save(true);applyMonth(false);view.keep=true;render();const ins=sheet.querySelectorAll('[data-ed=name]');const last=ins[ins.length-1];if(last){last.focus();last.select()}}
+ if(a==='delRow'){S.bills.splice(+t.dataset.i,1);for(const m in S.tx)recompute(+m);save(true);applyMonth(false);view.keep=true;render()}
  if(a==='addGoal'&&addGoalRow()){view.keep=true;render();return}
  if(a==='delGoal'){S.goals.splice(+t.dataset.g-1,1);buildGarden();save(true);gardener.row=-1;applyMonth(false);sendGardener();view.keep=true;render();return}
  if(a==='reset'){S=clone(SAMPLE);S.rules={};edited=false;buildGarden();try{localStorage.removeItem(KEY)}catch(err){}applyMonth(false);view.keep=true;render()}
  if(a==='copyCsv'){const txt=toCSV(),ta=v('tpl');const done=()=>{t.textContent='Copied';setTimeout(()=>t.textContent='Copy current budget as CSV',1600)};
   const fallback=()=>{ta.focus();ta.select();t.textContent='Selected · copy it from the box'};
   try{navigator.clipboard.writeText(txt).then(done,fallback)}catch(err){fallback()}}});
-sheet.addEventListener('change',e=>{const el=e.target;if(el.id==='sortRemember'){sortRemember=el.checked;return}if(el.dataset.sortkey!=null){const v=el.value;if(v==='new'){sortNew=el.dataset.sortkey;view.keep=true;return render()}if(v){sortNew=null;sortAssign(el.dataset.sortkey,v)}return}const ed=el.dataset.ed;if(!ed)return;const i=+el.dataset.i,g=+el.dataset.g,G=g===0?S.tank:S.goals[g-1];
+sheet.addEventListener('change',e=>{const el=e.target;if(el.id==='sortRemember'){sortRemember=el.checked;return}if(el.dataset.sortkey!=null){const v=el.value;if(v==='new'){sortNew=el.dataset.sortkey;view.keep=true;return render()}
+  if(v.startsWith('s:')){const c=v.slice(2),grp=groupsFor(month).find(x=>x.key===el.dataset.sortkey),amt=grp?Math.round(grp.total):0;let b=billOfCat(c);
+   if(!b){b={id:uid(),name:SETBY[c].name,cat:c,budget:amt,a:[0,0,0],due:'',note:'',spot:null};S.bills.push(b);placeSet(b)}sortNew=null;return sortAssign(el.dataset.sortkey,'b:'+b.id)}if(v){sortNew=null;sortAssign(el.dataset.sortkey,v)}return}const ed=el.dataset.ed;if(!ed)return;const i=+el.dataset.i,g=+el.dataset.g,G=g===0?S.tank:S.goals[g-1];
  if(ed==='income'){const val=num(el.value);if(sheet.querySelector('[data-ed=incomeAll]').value==='all')S.income=S.income.map(()=>val);else S.income[month]=val}
  if(ed==='incomeAll'&&el.value==='all'){const val=num(sheet.querySelector('[data-ed=income]').value);S.income=S.income.map(()=>val)}
  if(ed==='name')S.bills[i].name=el.value.trim().slice(0,60)||S.bills[i].name;
  if(ed==='budget')S.bills[i].budget=num(el.value);
  if(ed==='spent')S.bills[i].a[month]=num(el.value);
- if(ed==='spot'){assign(S.bills[i],el.value||null);save();applyMonth(false);view.keep=true;return render()}
+ if(ed==='spot'){assign(S.bills[i],el.value||null);save(true);applyMonth(false);view.keep=true;return render()}
+ if(ed==='cat'){const b=S.bills[i],nc=el.value,dst=nc!=='custom'&&S.bills.find(x=>x.cat===nc&&x!==b);
+  if(dst){mergeInto(S,b,dst);S.bills.splice(i,1)}else{b.cat=nc;if(nc!=='custom'&&!b.spot)placeSet(b)}save(true);applyMonth(false);view.keep=true;return render()}
  if(ed==='gname')G.name=el.value.trim().slice(0,40)||G.name;
  if(ed==='gtarget')G.target=num(el.value);
  if(ed==='gsaved')G.a[month]=num(el.value);
  if(ed==='ggoal')G.goal=num(el.value);
  if(ed==='gacct')G.account=el.value.trim().slice(0,40);
- save();applyMonth(false)});
+ save(!['spent','income','incomeAll','gsaved'].includes(ed));applyMonth(false)});
 document.getElementById('sortBtn').addEventListener('click',()=>{if(anim)stopAnim();selected=null;flyTo(null);budgetTab='sort';open({t:'budget'})});
 document.getElementById('budgetBtn').addEventListener('click',()=>{if(anim)stopAnim();selected=null;flyTo(null);budgetTab='overview';open({t:'budget'})});
 addEventListener('keydown',e=>{if(e.target.matches&&e.target.matches('input,select,textarea,button'))return;if(e.key===' '&&anim&&!anim.done){e.preventDefault();anim.paused=!anim.paused;updatePlaybar();return}if(e.key==='Escape'){if(view)close();else if(anim)stopAnim()}if(e.key==='ArrowLeft'&&month>0){if(anim)stopAnim();month--;applyMonth()}if(e.key==='ArrowRight'&&month<2){if(anim)stopAnim();month++;applyMonth()}});
 
 /* ---------- Import / export ---------- */
 function toCSV(){const q=s=>/[",\n]/.test(s)?`"${String(s).replace(/"/g,'""')}"`:s;
- return ['name,category,budget,spent',`Take-home pay,Income,${S.income[month]},`,...S.bills.map(b=>[q(b.name),q(b.cat),b.budget,b.a[month]].join(',')),
+ return ['name,category,budget,spent',`Take-home pay,Income,${S.income[month]},`,...S.bills.map(b=>[q(b.name),q(catName(b.cat)),b.budget,b.a[month]].join(',')),
   [q(S.tank.name),'Savings',S.tank.target,S.tank.a[month]].join(','),...S.goals.map(g=>[q(g.name),'Savings',g.target,g.a[month]].join(','))].join('\n')}
 function parseCSV(text){const rows=[];let row=[],f='',q=false;for(let i=0;i<text.length;i++){const c=text[i];
  if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
  else if(c==='"')q=true;else if(c===','||c==='\t'){row.push(f);f=''}else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(f);rows.push(row);row=[];f=''}else f+=c}
  if(f!==''||row.length){row.push(f);rows.push(row)}return rows.map(r=>r.map(s=>s.trim())).filter(r=>r.some(Boolean))}
-const KEYWORDS=[[/mortgage|\brent\b|hoa|property tax|home ?loan/i,'mailbox'],[/grocer|supermarket/i,'fridge'],[/fuel|gasoline|petrol|gas for/i,'gascan'],
- [/progressive|geico|state farm|allstate|farmers|usaa|liberty mutual|(car|auto|vehicle).*insur|insur.*(car|auto)/i,'car'],[/\bcar\b|auto|vehicle/i,'car'],
- [/electric|power/i,'lamp'],[/natural gas|heating|propane|furnace/i,'stove'],[/water|sewer|trash|garbage/i,'sink'],[/internet|wi-?fi|broadband|\btds\b|comcast|xfinity|spectrum|centurylink|starlink/i,'router'],[/phone|cell|mobile|wireless/i,'phone'],
- [/stream|netflix|hulu|disney|spotify|paramount|subscription|audible|\btv\b/i,'tv'],[/health|medical|doctor|dental|pharm|insurance/i,'medcab'],[/childcare|daycare|baby|diaper/i,'crib'],[/kid|child|school|activit|sport|soccer/i,'toychest'],
- [/household|cleaning|laundry/i,'basket'],[/fun|entertain|book|hobby|wants/i,'bookshelf'],[/pet|dog|cat|vet/i,'doghouse'],[/eat|restaurant|dining|takeout/i,'grill'],
- [/coffee|cafe/i,'coffee'],[/gym|fitness|yoga/i,'yoga'],[/bike|cycl/i,'bike'],[/repair|maintenance|tools|home improvement/i,'shed'],[/furniture|decor/i,'sofa'],[/clothes|clothing/i,'washer'],
- [/gift|giving|charity|church|tithe|donat|bless/i,'table'],[/plant|garden/i,'plant'],[/bath|personal care|toiletr|hair|counsel|therap/i,'vanity'],[/food/i,'fridge']];
-const SPOT_ORDER=['bed','sofa','nightstand','kidbed','tub','toilet','plant','washer','table','vanity','bookshelf','toychest','basket','tv','phone','lamp','router','sink','stove','fridge','mailbox','car','gascan','medcab','coffee','yoga','crib','bike','doghouse','grill','shed'];
-function autoPlace(list,taken=new Set()){
- for(const b of list){b.spot=null;for(const [re,sid] of KEYWORDS){if(re.test(b.name+' '+b.cat)&&!taken.has(sid)&&SPOTS[sid]){b.spot=sid;taken.add(sid);break}}}
- const free=SPOT_ORDER.filter(x=>SPOTS[x]&&!taken.has(x)).concat(Object.keys(SPOTS).filter(x=>!SPOT_ORDER.includes(x)&&!taken.has(x)));for(const b of list)if(!b.spot&&free.length)b.spot=free.shift()}
+/* where a category goes when its home object is already taken: the spare objects first, then homes of set categories not in use */
+const SPARE=['sofa','plant','tub','toilet','kidbed'];
+function freeSpots(){const used=new Set(S.bills.map(b=>b.spot).filter(Boolean)),inUse=new Set(S.bills.map(b=>b.cat));
+ return [...SPARE,...Object.keys(SPOTS).filter(x=>!SPARE.includes(x)).sort((a,b)=>(inUse.has(SPOTS[a].home)?1:0)-(inUse.has(SPOTS[b].home)?1:0))].filter(x=>SPOTS[x]&&!used.has(x))}
+function placeSet(b){if(b.cat==='custom'||b.spot)return;const home=SETBY[b.cat].spot;if(SPOTS[home]&&!billAt(home)){b.spot=home;return}const f=freeSpots().filter(x=>!SPOTS[x].home||!billOfCat(SPOTS[x].home));b.spot=f[0]||null}
 function readFile(file){const r=new FileReader();r.onload=()=>{try{importText(String(r.result),file.name)}catch(err){uploadMsg='That file couldn’t be read. Check that it’s a CSV or JSON file with a name and an amount on each row.';render()}};r.readAsText(file)}
 function parseDay(s){s=String(s||'').trim();let m=/^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);if(m)return{y:+m[1],mo:+m[2],d:+m[3]};m=/^(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](\d{2,4}))?$/.exec(s);if(m)return{y:m[3]?(+m[3]<100?2000+ +m[3]:+m[3]):2026,mo:+m[1],d:+m[2]};
  if(/[a-z]/i.test(s)&&/\d/.test(s)){const t=Date.parse(s);if(!isNaN(t)){const D=new Date(t);return{y:D.getFullYear(),mo:D.getMonth()+1,d:D.getDate()}}}return null}
-/* Transactions → bills. In order: (1) choices you saved, (2) a category column naming a bill, (3) a distinctive word from a bill's
-   own name appearing in the description, (4) savings account / goal names on transfers, (5) well-known merchant types matched to a bill
-   of that type. Anything left waits in Budget → Sort. Transfers that leave one of your accounts and arrive in another are paired up and ignored. */
-const KINDS={
- fuel:{re:/costco gas|shell|chevron|exxon|\bmobil\b|arco|texaco|\bbp\b|\b76\b|sinclair|valero|conoco|maverik|space age|fuel|gas station/i,bill:n=>/fuel|gasoline|petrol|\bgas\b/i.test(n)&&!/natural|utilit|heat/i.test(n),label:'Gas for the car',spot:'gascan',cat:'Transportation'},
- groceries:{re:/safeway|costco|trader joe|fred[- ]?meyer|winco|kroger|grocer|albertsons|whole foods|\baldi\b|market of choice|wm supercenter|walmart|natural grocers|sprouts|publix|wegmans|food lion|grocery outlet|local acres/i,bill:n=>/grocer|supermarket|\bfood\b/i.test(n),label:'Groceries',spot:'fridge',cat:'Food'},
- coffee:{re:/starbucks|dutch bros|coffee|espresso|\bcafe\b/i,bill:n=>/coffee|caf[eé]/i.test(n),label:'Coffee runs',spot:'coffee',cat:'Food'},
- dining:{re:/restaurant|pizza|taco|burger|mcdonald|chipotle|doordash|uber ?eats|grubhub|subway|jersey mike|olive garden|dairy queen|wendy'?s|panda express|chick-fil-a|drive ?in|diner|bistro|brewing|great harvest/i,bill:n=>/eat|dining|restaurant|take ?out|fast food/i.test(n),label:'Eating out',spot:'grill',cat:'Food'},
- internet:{re:/comcast|xfinity|spectrum|bend broadband|\btds\b|centurylink|frontier comm|starlink/i,bill:n=>/internet|wi-?fi|broadband/i.test(n),label:'Internet',spot:'router',cat:'Utilities'},
- phone:{re:/verizon|t-mobile|at&t|mint mobile|visible|cricket|wireless/i,bill:n=>/phone|cell|mobile|wireless/i.test(n),label:'Phone plan',spot:'phone',cat:'Utilities'},
- electric:{re:/pacific power|pg&e|\bpge\b|edison|electric|power bill|duke energy/i,bill:n=>/electric|power/i.test(n),label:'Electricity',spot:'lamp',cat:'Utilities'},
- natgas:{re:/cascade natural|nw natural|natural gas/i,bill:n=>/natural gas|heating/i.test(n),label:'Natural gas',spot:'stove',cat:'Utilities'},
- water:{re:/city of .*utilit|utility billing|water|sewer|republic services|waste management|garbage/i,bill:n=>/water|sewer|garbage|trash|utilit/i.test(n),label:'Water & sewer',spot:'sink',cat:'Utilities'},
- housing:{re:/mortgage|loan servic|rocket mortgage|mr\.? cooper|\brent\b|property management/i,bill:n=>/mortgage|\brent\b|housing|home ?loan/i.test(n),label:'Mortgage or rent',spot:'mailbox',cat:'Housing'},
- autoins:{re:/geico|progressive|state farm|allstate|farmers ins|usaa|liberty mutual/i,bill:n=>/(car|auto|vehicle).*insur|insur.*(car|auto|vehicle)/i.test(n),label:'Car insurance',spot:'car',cat:'Transportation'},
- health:{re:/blue cross|regence|kaiser|moda|pacificsource|aetna|cigna|united ?health|pharmacy|cvs|walgreens|clinic|dental|hospital|medical/i,bill:n=>/health|medical|doctor|dental|pharm/i.test(n),label:'Health & medical',spot:'medcab',cat:'Health'},
- streaming:{re:/netflix|hulu|disney\s?plus|disney\+|spotify|youtube premium|paramount|peacock|hbo|audible|google \*google one|prime video/i,bill:n=>/stream|subscription/i.test(n),label:'Subscriptions',spot:'tv',cat:'Subscriptions'},
- pets:{re:/petco|petsmart|\bvet\b|veterinar|chewy/i,bill:n=>/\bpets?\b|\bdog|\bcat\b|\bvet/i.test(n),label:'Pet care',spot:'doghouse',cat:'Pets'},
- hardware:{re:/home depot|lowe'?s|ace hardware|harbor freight|hardware|menards/i,bill:n=>/repair|maintenance|hardware|home improvement/i.test(n),label:'Home repairs',spot:'shed',cat:'Home'},
- household:{re:/target|amazon|dollar|bi-mart|tj ?maxx|hobby ?lobby|household|bed bath/i,bill:n=>/household|home goods|\bhome\b|supplies/i.test(n),label:'Household goods',spot:'basket',cat:'Home'},
- fitness:{re:/\bgym\b|fitness|planet fit|ymca|yoga|crossfit/i,bill:n=>/gym|fitness|yoga/i.test(n),label:'Gym',spot:'yoga',cat:'Health'},
- childcare:{re:/daycare|childcare|preschool/i,bill:n=>/childcare|daycare|preschool/i.test(n),label:'Childcare',spot:'crib',cat:'Family'},
- kids:{re:/school|soccer|\bsports?\b|league|lessons|swim|dick'?s sporting/i,bill:n=>/kid|child|school|sport|soccer|activit/i.test(n),label:'Kids’ activities',spot:'toychest',cat:'Family'},
- fun:{re:/barnes|bookstore|movie|theater|cinema|steam games|\bgames?\b/i,bill:n=>/book|entertain|hobby|\bfun\b/i.test(n),label:'Fun money',spot:'bookshelf',cat:'Wants'}};
+/* Transactions → categories. In order: (1) choices you saved, (2) a category column (a bank's category or a Plaid code), (3) a distinctive word
+   from one of your budget lines appearing in the description, (4) savings account / goal names on transfers, (5) well-known merchants for
+   each set category. Anything left waits in Budget → Sort. Transfers that leave one of your accounts and arrive in another are paired up and ignored. */
 const STOPWORDS=new Set('general home house money free misc other bill bills fund funds savings saving total monthly month needs wants family kids car auto utilities utility insurance payment payments plan fees fee gas food groceries grocery stuff extra extras spending personal account transfer purchase withdrawal deposit debit credit card online mobile internet point sale external the and for with from via'.split(' '));
 const BOILER=/^(?:(?:recurring |pos |debit card |check ?card |card )?(?:purchase|payment)(?: authorized)?(?: on \d+\/\d+)?|point of sale (?:withdrawal|deposit)|external (?:withdrawal|deposit)|descriptive (?:withdrawal|deposit)|ach (?:debit|credit|withdrawal|deposit)|online (?:payment|transfer)(?: to)?|bill ?pay(?:ment)?|withdrawal|deposit|eff\.? [\d\-\/]+)\s+/i;
 const isXfer=d=>/\btransfer\b|\bxfer\b/i.test(d);
@@ -947,17 +1004,25 @@ function goalRef(text){const lo=text.toLowerCase(),l4=a=>((a||'').match(/(\d{4})
  const hit=g=>{if(!g)return false;const d4=l4(g.account);if(d4&&new RegExp('\\b\\d*'+d4+'\\b').test(lo))return true;
   const words=((g.account||'')+' '+g.name).toLowerCase().split(/[^a-z]+/).filter(w=>w.length>3&&!STOPWORDS.has(w)&&!/bank|union|credit|checking/.test(w));return words.some(w=>new RegExp('\\b'+w+'\\b').test(lo))};
  if(hit(S.tank))return'tank';for(let i=0;i<S.goals.length;i++)if(hit(S.goals[i]))return'goal'+i;return null}
+const billOfCat=id=>S.bills.find(b=>b.cat===id);
+/* a custom line that names several kinds of spending ("General (Gas, Groceries, Home)") collects those kinds */
+const coversOf=b=>b.cat==='custom'?SET.filter(c=>c.line.test(b.name)).map(c=>c.id):[];
+const coverOf=id=>S.bills.find(b=>coversOf(b).includes(id));
 function classify(t,df,limit){/* sets t.k / t.bill / t.goal / t.hint for one spending row */
  const rule=S.rules[t.key];
  if(rule){if(rule.t==='bill'&&billById(rule.id)){t.k='out';t.bill=rule.id;t.how='rule';return}if(rule.t==='goal'&&(rule.g==='tank'||S.goals[+rule.g.slice(4)])){t.k='save';t.goal=rule.g;t.how='rule';return}
   if(rule.t==='ignore'){t.k='ignore';t.how='rule';return}if(rule.t==='income'){t.k='in';t.how='rule';return}}
  if(t.k==='xfer')return;
- if(t.cat){const b=S.bills.find(b=>b.name.toLowerCase()===t.cat.toLowerCase());if(b){t.bill=b.id;t.how='category';return}}
- const words=new Set(t.desc.replace(/\b(google|paypal|apple\.com\/bill|sq|sp|tst|pp)\s*\*/gi,' ').toLowerCase().split(/[^a-z&']+/));let best=null,score=0,tie=false;
- for(const b of S.bills){const sc=billTokens(b.name,df,limit).filter(w=>words.has(w)).reduce((x,w)=>x+w.length,0);if(sc>score){best=b;score=sc;tie=false}else if(sc&&sc===score)tie=true}
- if(best&&!tie){t.bill=best.id;t.how='name';return}
- if(isXfer(t.desc)){const g=goalRef(t.desc);if(g){t.k='save';t.goal=g;t.how='account';return}}
- for(const kd in KINDS){const K=KINDS[kd];if(K.re.test(t.desc)&&!(kd==='internet'&&isXfer(t.desc))){t.hint=kd;const b=S.bills.find(b=>K.bill(b.name));if(b){t.bill=b.id;t.how='type'}return}}}
+ if(t.cat){const b=S.bills.find(b=>b.name.toLowerCase()===t.cat.toLowerCase()||(b.lines||[]).some(l=>l.name.toLowerCase()===t.cat.toLowerCase()));if(b){t.bill=b.id;t.how='category';return}
+  const id=pfcOf(t.cat)||catOf(t.cat);if(id){t.hint=id;const c=billOfCat(id);if(c){t.bill=c.id;t.how='category';return}}}
+ const words=new Set(t.desc.replace(/\b(google|paypal|apple\.com\/bill|sq|sp|tst|pp)\s*\*/gi,' ').toLowerCase().split(/[^a-z&']+/));
+ const byName=list=>{let best=null,score=0,tie=false;for(const b of list){const names=[b.name,...(b.lines||[]).map(l=>l.name)];const sc=Math.max(0,...names.map(n=>billTokens(n,df,limit).filter(w=>words.has(w)).reduce((x,w)=>x+w.length,0)));
+  if(sc>score){best=b;score=sc;tie=false}else if(sc&&sc===score&&b!==best)tie=true}return best&&!tie?best:null};
+ /* custom categories are your own words, so they're checked before the set list */
+ let b=byName(S.bills.filter(b=>b.cat==='custom'));if(b){t.bill=b.id;t.how='name';return}
+ if(isXfer(t.desc)){const g=goalRef(t.desc);if(g){t.k='save';t.goal=g;t.how='account'}return}
+ for(const c of SET){if(c.re.test(t.desc)){if(!t.hint)t.hint=c.id;b=billOfCat(c.id)||coverOf(c.id);if(b){t.bill=b.id;t.how='type'}return}}
+ b=byName(S.bills.filter(b=>b.cat!=='custom'));if(b){t.bill=b.id;t.how='name'}}
 function recompute(m){const tx=S.tx[m];if(!Array.isArray(tx))return;
  S.bills.forEach(b=>b.a[m]=0);S.tank.a[m]=0;S.goals.forEach(g=>g.a[m]=0);let inc=0;
  for(const t of tx){if(t.k==='in')inc+=t.amt;else if(t.k==='out'&&t.bill){const b=billById(t.bill);if(b)b.a[m]+=t.amt;else t.bill=null}else if(t.k==='save'){const g=t.goal==='tank'?S.tank:S.goals[+String(t.goal).slice(4)];if(g)g.a[m]+=t.amt;else{t.k='out';t.goal=null}}}
@@ -990,12 +1055,14 @@ function importTx(rows,hasHead,h){const col=(re,d)=>hasHead?h.findIndex(x=>re.te
  uploadMsg=`Loaded <b>${tx.length} transactions</b> into ${MONTHS[m]}: ${c('in')} deposits, ${matched} purchases matched to bills, ${c('save')} savings transfers${pairs?`, ${pairs} transfers between your own accounts set aside`:''}.${uns?` <b>${uns} need${uns===1?'s':''} sorting.</b>`:' Everything was matched.'}`;
  if(uns){budgetTab='sort';render()}else{budgetTab='upload';render();setTimeout(()=>{if(view&&view.t==='budget'&&budgetTab==='upload')startAnim()},1500)}}
 function sanG(g){return{account:String(g.account||'').slice(0,40),name:String(g.name||'Goal').slice(0,40),goal:num(g.goal),start:num(g.start),target:num(g.target),a:Array.isArray(g.a)&&g.a.length===3?g.a.map(num):[0,0,0]}}
-function importText(text,name){let n=0,extra='';
+let catMsg='';
+function importText(text,name){let n=0,extra='';catMsg='';
  if(/\.json$/i.test(name)||/^\s*[\[{]/.test(text)){const d=JSON.parse(text);const arr=Array.isArray(d)?d:d.bills;if(!Array.isArray(arr))throw 0;
-  const bills=arr.map(x=>({id:uid(),name:String(x.name||'Bill').slice(0,60),cat:CATS.includes(x.cat||x.category)?(x.cat||x.category):'Other',budget:num(x.budget),
-   a:Array.isArray(x.a)&&x.a.length===3?x.a.map(num):[0,0,0].map(()=>num(x.spent!=null?x.spent:x.budget)),due:String(x.due||'').slice(0,30),note:String(x.note||'').slice(0,200),spot:SPOTS[x.spot]?x.spot:null}));
+  const bills=arr.map(x=>({id:uid(),name:String(x.name||'Bill').slice(0,60),cat:String(x.cat||x.category||''),budget:num(x.budget),
+   a:Array.isArray(x.a)&&x.a.length===3?x.a.map(num):[0,0,0].map(()=>num(x.spent!=null?x.spent:x.budget)),due:String(x.due||'').slice(0,30),note:String(x.note||'').slice(0,200),spot:SPOTS[x.spot]?x.spot:null,
+   lines:Array.isArray(x.lines)?x.lines.slice(0,40).map(l=>({name:String(l.name||'').slice(0,60),budget:num(l.budget)})):undefined}));
   if(!Array.isArray(d)){if(Array.isArray(d.income)&&d.income.length===3)S.income=d.income.map(num);if(d.tank)Object.assign(S.tank,sanG(d.tank));if(Array.isArray(d.goals)){S.goals=d.goals.slice(0,6).map(sanG);buildGarden()}}
-  const taken=new Set(bills.filter(b=>b.spot).map(b=>b.spot));autoPlace(bills.filter(b=>!b.spot),taken);S.bills=bills;n=bills.length}
+  const st=migrate({bills,tx:{},rules:{}});S.bills=st.bills;S.bills.forEach(placeSet);n=S.bills.length}
  else{const rows=parseCSV(text);if(!rows.length)throw 0;const h=rows[0].map(s=>s.toLowerCase());const hasHead=h.some(s=>/name|item|category|budget|amount|spent|actual|date|desc/.test(s));
   if((hasHead&&h.some(s=>/date|posted/.test(s)))||(!hasHead&&parseDay(rows[0][0])))return importTx(rows,hasHead,h);
   const col=(re,d)=>hasHead?h.findIndex(s=>re.test(s)):d;
@@ -1007,14 +1074,20 @@ function importText(text,name){let n=0,extra='';
    if(/income|take.?home|paycheck|salary|wages|net pay/i.test(nm+' '+cat)){inc+=bud||sp;incRows++;continue}
    if(/saving/i.test(cat)||/\bsavings?\b|retirement|\b401\s?\(?k\)?|\bira\b|\broth\b|invest|emergency fund|rainy day|college fund|\b529\b/i.test(nm)){
     const g={name:nm,account:'',goal:Math.max(Math.round((bud||sp)*12),100),start:0,target:bud,a:[sp,sp,sp]};
-    if(!tank&&/emergency|rainy|safety/i.test(nm))tank=g;else if(goals.length<6)goals.push(g);else bills.push({id:uid(),name:nm,cat:'Other',budget:bud,a:[sp,sp,sp],due:'',note:'',spot:null});continue}
-   const c=CATS.find(x=>x.toLowerCase()===cat.toLowerCase())||'Other';bills.push({id:uid(),name:nm,cat:c,budget:bud,a:[sp,sp,sp],due:'',note:'',spot:null})}
+    if(!tank&&/emergency|rainy|safety/i.test(nm))tank=g;else if(goals.length<6)goals.push(g);else bills.push({id:uid(),name:nm,cat:'custom',budget:bud,a:[sp,sp,sp],due:'',note:'',spot:null,lines:[{name:nm,budget:bud}]});continue}
+   const c=catOf(nm,cat);
+   if(c){let b=bills.find(x=>x.cat===c);if(!b)bills.push(b={id:uid(),name:SETBY[c].name,cat:c,budget:0,a:[0,0,0],due:'',note:'',spot:null,lines:[]});
+    b.budget=Math.round((b.budget+bud)*100)/100;b.a=b.a.map(v=>Math.round((v+sp)*100)/100);b.lines.push({name:nm,budget:bud})}
+   else bills.push({id:uid(),name:nm,cat:'custom',budget:bud,a:[sp,sp,sp],due:'',note:'',spot:null,lines:[{name:nm,budget:bud}]})}
   if(!bills.length&&!goals.length&&!tank)throw 0;
-  autoPlace(bills);S.bills=bills;S.goals=goals;S.tank=tank||{name:'Emergency fund',account:'',goal:1000,start:0,target:0,a:[0,0,0]};S.tx={};
+  S.bills=bills;bills.forEach(placeSet);S.goals=goals;S.tank=tank||{name:'Emergency fund',account:'',goal:1000,start:0,target:0,a:[0,0,0]};S.tx={};
   if(incRows){S.income=[inc,inc,inc];extra+=` Take-home pay set to ${fmt(inc)}.`}buildGarden();n=bills.length;
+  const sets=bills.filter(b=>b.cat!=='custom'),cust=bills.filter(b=>b.cat==='custom'),lines=sets.reduce((x,b)=>x+b.lines.length,0);
+  catMsg=`<b>${lines} budget line${lines===1?'':'s'}</b> matched ${sets.length} set categor${sets.length===1?'y':'ies'}${sets.some(b=>b.lines.length>1)?' (lines of the same kind were combined)':''}.`+
+   (cust.length?` <b>${cust.length} became custom categor${cust.length===1?'y':'ies'}</b>: ${cust.map(b=>esc(b.name)+(coversOf(b).length?` (collects ${coversOf(b).map(id=>SETBY[id].name.toLowerCase()).join(' and ')})`:'')).join(', ')}. Give ${cust.length===1?'it':'each one'} a spot in the house below, or fold it into a set category.`:' Everything fit a set category.');
   extra+=` ${goals.length+(tank?1:0)} savings line${goals.length+(tank?1:0)===1?'':'s'} became garden rows${tank?' and the water tower':''}; set each goal’s total in Edit. All three months start with the budgeted amounts.`}
  save();applyMonth(false);const unplaced=S.bills.filter(b=>!b.spot).length;
- uploadMsg=`Loaded <b>${n} bill${n===1?'':'s'}</b>${unplaced?`; ${unplaced} didn’t fit in the house and show only in the budget`:'; every one has a spot in the house'}.${esc(extra)}`;budgetTab='upload';render()}
+ uploadMsg=catMsg?catMsg+esc(extra):`Loaded <b>${n} categor${n===1?'y':'ies'}</b>${unplaced?`; ${unplaced} need${unplaced===1?'s':''} a spot in the house`:'; every one has a spot in the house'}.${esc(extra)}`;catMsg='';budgetTab='upload';render()}
 
 /* ---------- Camera moves ---------- */
 const tmp=new THREE.Vector3();
