@@ -50,7 +50,6 @@ body.moving .mover{display:flex}body.moving .bar{opacity:0;pointer-events:none}
 .sheet .card h3{margin:0 0 4px}.card .sub{margin:0}
 .card .actions{margin-top:10px}
 .okline{color:#2f8a5c;font-weight:600}.warnline{color:#b23642;font-weight:600}
-.tag-sample{font-size:13px;color:var(--soft);background:#ffffff8c;border-radius:999px;padding:4px 10px;user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .sheet{position:fixed;left:50%;bottom:max(12px,env(safe-area-inset-bottom));width:min(460px,calc(100% - 24px));max-height:64vh;overflow:auto;transform:translate(-50%,calc(100% + 60px));transition:transform .38s cubic-bezier(.2,.9,.3,1.15);background:var(--card);border-radius:26px;box-shadow:0 20px 60px #5a3f8a3d;padding:16px 20px 20px;overscroll-behavior:contain}
 .sheet.open{transform:translate(-50%,0)}
 .sheet.wide{max-height:78vh}
@@ -161,7 +160,7 @@ body.playing .bar{opacity:0;pointer-events:none}body.playing .bar>*{pointer-even
  <button class="btn" id="budgetBtn">Budget</button>
  <button class="btn ghost" id="menuBtn" aria-label="Menu: backup, restore, upload and more"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><i class="dot" id="menuDot"></i></button>
  <button class="btn" id="sortBtn" style="display:none;background:#e8606c"></button>
- <span class="tag-sample" id="sampleTag">Sample budget</span>
+ <button class="btn" id="startBtn" style="background:#8f7ad6">Upload your budget</button>
 </div>
 
 <aside class="sheet" id="sheet" aria-live="polite"></aside>
@@ -906,8 +905,8 @@ function applyMonth(rerender=true){let overN=0;
  const spent=S.bills.reduce((s,b)=>s+b.a[month],0)+unsortedSum(month),saved=[S.tank,...S.goals].reduce((s,g)=>s+g.a[month],0),left=S.income[month]-spent-saved;
  document.getElementById('stats').innerHTML=[['Take-home',S.income[month]],['Bills',spent],['Saved',saved,'saved'],['Left over',left,left<0?'neg':'']]
   .map(([l,v,c])=>`<div class="stat ${c||''}"><span>${l}</span><b>${v<0?'−':''}${fmt(Math.abs(v))}</b></div>`).join('');
- document.getElementById('hint').innerHTML=overN?`<b>${overN} bill${overN===1?'':'s'} over budget</b> · red rings · tap anything`:'Everything is on budget · tap anything';
- document.getElementById('sampleTag').textContent=edited?'Your edits':'Sample budget';
+ document.getElementById('hint').innerHTML=!S.bills.length?'Tap any object to give it a category':overN?`<b>${overN} bill${overN===1?'':'s'} over budget</b> · red rings · tap anything`:'Everything is on budget · tap anything';
+ document.getElementById('startBtn').style.display=edited?'none':'';
  {const n=unsortedOf(month).length,sb=document.getElementById('sortBtn');sb.style.display=n?'':'none';sb.textContent=`Sort ${n} purchase${n===1?'':'s'}`}
  document.querySelectorAll('#months button').forEach((b,i)=>b.setAttribute('aria-pressed',i===month));
  if(rerender&&view)render()}
@@ -976,6 +975,12 @@ function segments(){const inc=S.income[month]||0;
  const sav=[{id:'tank',name:S.tank.name,v:S.tank.a[month],c:'#4f9fe0'},...S.goals.map((g,i)=>({id:'goal'+i,name:g.name,v:g.a[month],c:rows[i]?rows[i].look.color:'#cccccc'}))];
  const un=unsortedSum(month);if(un>0)items.push({id:'__sort',name:'Not sorted yet',v:un,c:'#cfc7dc',over:0});
  const used=[...items,...sav].reduce((s,x)=>s+x.v,0);return {inc,items,sav,used,left:inc-used}}
+/* ---------- Getting started: the house shows a made-up budget until you bring in your own ---------- */
+function vStart(){return `${head('Get started')}<h2>Make it your own</h2><p class="sub">The house is showing a made-up example budget. Bring in yours and every object, garden row and number becomes your own. Everything stays on this device.</p>
+ <div class="card"><h3>1. Upload your budget</h3><p class="sub">A spreadsheet or CSV with your monthly bills and amounts, in any layout. Each line is matched to a set category with its own spot in the house; anything that doesn’t fit becomes a custom category you place yourself. Savings lines become garden rows.</p>
+  <label class="drop" id="drop" style="margin-top:10px"><b style="color:var(--ink)">Choose your budget</b><span>Excel or CSV</span><input type="file" id="file" accept=".csv,.xlsx,.xls,.xlsm,.ods,.json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="position:absolute;opacity:0;width:1px;height:1px"></label></div>
+ <div class="card"><h3>2. Then add a bank statement</h3><p class="sub">After your budget is in, upload a month of transactions (PDF statement, CSV or OFX/QFX) from Budget → Upload. Purchases land on the right objects and the month plays back day by day.</p></div>
+ <div class="card"><h3>No spreadsheet?</h3><p class="sub">Start with an empty house and add your categories and savings goals by hand.</p><div class="actions"><button class="btn sm ghost" data-act="startBlank">Start from scratch</button><button class="btn sm ghost" data-act="goMenuRestore">Restore a backup</button></div></div>`}
 /* ---------- Menu: backup, restore, storage, uploads ---------- */
 const META='cozy-budget-meta';var meta={};try{meta=JSON.parse(localStorage.getItem(META)||'{}')||{}}catch(e){}
 const saveMeta=()=>{try{localStorage.setItem(META,JSON.stringify(meta))}catch(e){}};
@@ -1112,7 +1117,8 @@ function render(){if(!view)return;let html='';
  else if(view.t==='pile')html=vPile();
  else if(view.t==='menu')html=vMenu();
  else if(view.t==='catalog')html=vCatalog();
- const st=sheet.scrollTop;sheet.innerHTML=html;sheet.classList.toggle('wide',view.t==='budget'||view.t==='menu'||view.t==='catalog');if(view.keep)sheet.scrollTop=st;else sheet.scrollTop=0;view.keep=false;
+ else if(view.t==='start')html=vStart();
+ const st=sheet.scrollTop;sheet.innerHTML=html;sheet.classList.toggle('wide',['budget','menu','catalog','start'].includes(view.t));if(view.keep)sheet.scrollTop=st;else sheet.scrollTop=0;view.keep=false;
  sheet.classList.add('open');document.body.classList.add('sheet-open');
  const rf=document.getElementById('rs-file');if(rf)rf.addEventListener('change',()=>{const file=rf.files[0];if(file)file.text().then(txt=>pickBackup(txt,file.name)).catch(()=>{menuMsg='<span class="warnline">That file couldn’t be read.</span>';render()})});
  const f=document.getElementById('file');if(f){f.addEventListener('change',()=>f.files[0]&&readFile(f.files[0]));const d=document.getElementById('drop');
@@ -1136,6 +1142,9 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
   const b={id:uid(),name:nm,cat:'custom',budget:num(v('nb-budget').value),a:[0,0,0],due:'',note:'',spot:null};S.bills.push(b);if(sp&&SPOTS[sp]&&!billAt(sp))b.spot=sp;
   sortNew=null;return sortAssign(key,'b:'+b.id)}
  if(a==='catalog')return open({t:'catalog'});
+ if(a==='goMenuRestore'){menuMsg='';return open({t:'menu'})}
+ if(a==='startBlank'){if(anim)stopAnim();S={income:[0,0,0],open0:0,tx:{},bills:[],tank:{name:'Emergency fund',account:'',goal:1000,start:0,target:0,a:[0,0,0]},goals:[],rules:{},layout:{hidden:[],moved:{},added:[]}};
+  save(true);buildGarden();gardener.row=-1;applyMonth(false);uploadMsg='';budgetTab='edit';return open({t:'budget'})}
  if(a==='addObj')return addFromCatalog(t.dataset.type);
  if(a==='moveObj')return startMove(SPOTS[t.dataset.spot],false);
  if(a==='hideObj'){const h=SPOTS[t.dataset.spot];if(!h)return;const L=layout();
@@ -1195,6 +1204,7 @@ document.getElementById('sortBtn').addEventListener('click',()=>{if(anim)stopAni
 document.getElementById('mvRot').addEventListener('click',()=>{if(!mv)return;const h=mv.h,cx=h.ctr.x,cz=h.ctr.z;setPose(h,h.g.position.x,h.g.position.z,((h.k||0)+1)%4);setPose(h,h.g.position.x+cx-h.ctr.x,h.g.position.z+cz-h.ctr.z,h.k);moveTo(h.g.position.x,h.g.position.z)});
 document.getElementById('mvCancel').addEventListener('click',()=>endMove(false));
 document.getElementById('mvDone').addEventListener('click',()=>{if(!mv||!mv.ok)return;const h=mv.h,isNew=mv.isNew;endMove(true);if(isNew&&byId[h.id])select(h.id)});
+document.getElementById('startBtn').addEventListener('click',()=>{if(anim)stopAnim();selected=null;flyTo(null);open({t:'start'})});
 document.getElementById('menuBtn').addEventListener('click',()=>{if(anim)stopAnim();selected=null;flyTo(null);menuMsg='';resetArm=false;open({t:'menu'})});
 document.getElementById('budgetBtn').addEventListener('click',()=>{if(anim)stopAnim();selected=null;flyTo(null);budgetTab='overview';open({t:'budget'})});
 addEventListener('keydown',e=>{if(e.target.matches&&e.target.matches('input,select,textarea,button'))return;if(e.key===' '&&anim&&!anim.done){e.preventDefault();anim.paused=!anim.paused;updatePlaybar();return}if(e.key==='Escape'){if(view)close();else if(anim)stopAnim()}if(e.key==='ArrowLeft'&&month>0){if(anim)stopAnim();month--;applyMonth()}if(e.key==='ArrowRight'&&month<2){if(anim)stopAnim();month++;applyMonth()}});
@@ -1308,7 +1318,7 @@ function importSheet(name){const ws=lastWB.wb.Sheets[name],p2=v=>String(v).padSt
  if(!t)throw{msg:`Couldn’t find a budget or transactions on the “${esc(name)}” sheet.`+sheetPicker(name)};
  importText(null,lastWB.nm,t);if(lastWB.wb.SheetNames.length>1){uploadMsg+=sheetPicker(name);render()}}
 const sheetPicker=cur=>lastWB&&lastWB.wb.SheetNames.length>1?`<label class="f" style="margin-top:10px">Sheet used from ${esc(lastWB.nm)}<select data-sheet="1">${lastWB.wb.SheetNames.map(n=>`<option ${n===cur?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`:'';
-async function readFile(file){const nm=file.name||'file';pendingPDF=null;uploadMsg=`Reading ${esc(nm)}…`;budgetTab='upload';render();
+async function readFile(file){const nm=file.name||'file';pendingPDF=null;uploadMsg=`Reading ${esc(nm)}…`;budgetTab='upload';view={t:'budget'};render();
  try{const buf=await file.arrayBuffer(),head=new TextDecoder().decode(buf.slice(0,5));
   if(/\.pdf$/i.test(nm)||head.startsWith('%PDF'))return await readPDF(buf,nm);
   if(/\.(xlsx|xlsm|xlsb|xls|ods|numbers)$/i.test(nm)||head.startsWith('PK'))return await readXLSX(buf,nm);
