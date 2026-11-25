@@ -40,6 +40,13 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 .btn.ghost{background:#f2edf8;color:var(--ink);box-shadow:none}
 .btn.danger{background:var(--coralbg);color:#b23642;box-shadow:none}
 .btn.sm{min-height:40px;padding:0 14px;font-size:15px}
+#menuBtn{position:relative;width:44px;padding:0;display:grid;place-items:center}
+#menuBtn .dot{position:absolute;top:6px;right:6px;width:10px;height:10px;border-radius:50%;background:var(--coral);box-shadow:0 0 0 2px #f2edf8;display:none}
+#menuBtn.due .dot{display:block}
+.card{background:#fbf8fe;border-radius:18px;padding:14px 16px;margin-top:12px}
+.sheet .card h3{margin:0 0 4px}.card .sub{margin:0}
+.card .actions{margin-top:10px}
+.okline{color:#2f8a5c;font-weight:600}.warnline{color:#b23642;font-weight:600}
 .tag-sample{font-size:13px;color:var(--soft);background:#ffffff8c;border-radius:999px;padding:4px 10px;user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .sheet{position:fixed;left:50%;bottom:max(12px,env(safe-area-inset-bottom));width:min(460px,calc(100% - 24px));max-height:64vh;overflow:auto;transform:translate(-50%,calc(100% + 60px));transition:transform .38s cubic-bezier(.2,.9,.3,1.15);background:var(--card);border-radius:26px;box-shadow:0 20px 60px #5a3f8a3d;padding:16px 20px 20px;overscroll-behavior:contain}
 .sheet.open{transform:translate(-50%,0)}
@@ -91,7 +98,7 @@ body.sheet-open .bar>*{pointer-events:none}
 .lg small{color:#b23642;font-size:13px;margin-left:6px}
 .warn{margin:8px 0 0;padding:8px 12px;border-radius:12px;background:var(--coralbg);color:#b23642;font-size:14px}
 label.f{display:grid;gap:4px;font-size:13px;color:var(--soft)}
-input[type=text],input[type=number],select{font:inherit;font-size:16px;color:var(--ink);background:#fff;border:1.5px solid #e4dcef;border-radius:12px;height:44px;padding:0 12px;width:100%}
+input[type=text],input[type=number],input[type=password],select{font:inherit;font-size:16px;color:var(--ink);background:#fff;border:1.5px solid #e4dcef;border-radius:12px;height:44px;padding:0 12px;width:100%}
 .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 .erow{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) 44px;gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid var(--line)}
 .erow .wide{grid-column:1 / -2}
@@ -148,6 +155,7 @@ body.playing .bar{opacity:0;pointer-events:none}body.playing .bar>*{pointer-even
  <span class="hint" id="hint"></span>
  <button class="btn ghost" id="playBtn">▶ Play month</button>
  <button class="btn" id="budgetBtn">Budget</button>
+ <button class="btn ghost" id="menuBtn" aria-label="Menu: backup, restore, upload and more"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><i class="dot" id="menuDot"></i></button>
  <button class="btn" id="sortBtn" style="display:none;background:#e8606c"></button>
  <span class="tag-sample" id="sampleTag">Sample budget</span>
 </div>
@@ -251,7 +259,7 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 let S=clone(SAMPLE),edited=false;
 try{const raw=localStorage.getItem(KEY);if(raw){const v=JSON.parse(raw);if(v&&Array.isArray(v.bills)&&v.tank&&Array.isArray(v.goals)&&v.goals.length<=6&&Array.isArray(v.income)){S=v;edited=true}}}catch(e){}
 if(!S.tx||typeof S.tx!=='object')S.tx={};if(!S.rules||typeof S.rules!=='object')S.rules={};if(!(S.open0>=0))S.open0=600;
-function save(keepTx){edited=true;if(!keepTx&&S.tx)delete S.tx[month];try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(keepTx){edited=true;if(!keepTx&&S.tx)delete S.tx[month];try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(typeof updateMenuDot==='function'){updateMenuDot();if(persisted==null)askPersist()}}
 const SLOTS=10;
 let month=2;
 const num=v=>{const n=parseFloat(String(v).replace(/[$,\s]/g,''));return isFinite(n)?Math.max(0,n):0};
@@ -876,6 +884,56 @@ function segments(){const inc=S.income[month]||0;
  const sav=[{id:'tank',name:S.tank.name,v:S.tank.a[month],c:'#4f9fe0'},...S.goals.map((g,i)=>({id:'goal'+i,name:g.name,v:g.a[month],c:rows[i]?rows[i].look.color:'#cccccc'}))];
  const un=unsortedSum(month);if(un>0)items.push({id:'__sort',name:'Not sorted yet',v:un,c:'#cfc7dc',over:0});
  const used=[...items,...sav].reduce((s,x)=>s+x.v,0);return {inc,items,sav,used,left:inc-used}}
+/* ---------- Menu: backup, restore, storage, uploads ---------- */
+const META='cozy-budget-meta';var meta={};try{meta=JSON.parse(localStorage.getItem(META)||'{}')||{}}catch(e){}
+const saveMeta=()=>{try{localStorage.setItem(META,JSON.stringify(meta))}catch(e){}};
+const backupDue=()=>edited&&(!meta.lastBackup||Date.now()-Date.parse(meta.lastBackup)>30*864e5);
+function updateMenuDot(){const b=document.getElementById('menuBtn');if(b)b.classList.toggle('due',backupDue())}
+/* ask the browser not to clear this site's storage on its own (Chrome grants it quietly for sites you use; Safari exempts home-screen apps) */
+var persisted=null;function askPersist(){if(navigator.storage&&navigator.storage.persist)navigator.storage.persisted().then(p=>p||navigator.storage.persist()).then(p=>{persisted=!!p;const el=document.getElementById('persistLine');if(el)el.innerHTML=persistText()}).catch(()=>{})}
+const standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const persistText=()=>standalone()?'<span class="okline">✓ Installed on your home screen, so the browser won’t clear it on its own.</span>':persisted?'<span class="okline">✓ This browser has agreed not to clear it on its own.</span>':'The browser could clear it if you clear site data or storage runs low, so keep a backup.';
+/* encrypted backups: PBKDF2-SHA-256 (310,000 rounds) turns the passcode into an AES-256-GCM key; the file holds only the scrambled data */
+const b64e=u8=>{let s2='';for(let i=0;i<u8.length;i+=0x8000)s2+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s2)};
+const b64d=t=>Uint8Array.from(atob(t),c=>c.charCodeAt(0));
+async function passKey(pass,salt,iter){const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+ return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:iter,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function makeBackup(pass){const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),iter=310000,key=await passKey(pass,salt,iter);
+ const plain=new TextEncoder().encode(JSON.stringify({savedAt:new Date().toISOString(),state:S}));const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain));
+ return JSON.stringify({app:'cozy-budget-backup',version:1,encrypted:true,kdf:{name:'PBKDF2',hash:'SHA-256',iterations:iter,salt:b64e(salt)},cipher:{name:'AES-GCM',iv:b64e(iv)},data:b64e(ct)})}
+async function openBackup(file,pass){if(!file.encrypted)return file.payload||file;
+ const key=await passKey(pass,b64d(file.kdf.salt),file.kdf.iterations);let plain;
+ try{plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64d(file.cipher.iv)},key,b64d(file.data))}catch(e){throw{msg:'That passcode doesn’t open this backup. Check it and try again.'}}
+ return JSON.parse(new TextDecoder().decode(plain))}
+const validState=v=>v&&Array.isArray(v.bills)&&v.tank&&Array.isArray(v.goals)&&v.goals.length<=6&&Array.isArray(v.income)&&v.income.length===3;
+async function deliverFile(text,fname){const blob=new Blob([text],{type:'application/json'});
+ try{const f=new File([blob],fname,{type:'application/json'});if(coarse&&navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:'Cozy Budget backup'});return true}}
+ catch(e){if(e&&e.name==='AbortError')return false}
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);return true}
+let menuMsg='',restoreFile=null,restoreReady=null,resetArm=false,installEvt=null;
+function pickBackup(txt,name){let d;try{d=JSON.parse(txt)}catch(e){d=null}
+ if(!d||d.app!=='cozy-budget-backup'){menuMsg='<span class="warnline">That isn’t a Cozy Budget backup file.</span>';restoreFile=null;restoreReady=null;view={t:'menu'};return render()}
+ restoreReady=null;restoreFile={name,data:d};menuMsg='';if(!d.encrypted&&validState(d.state))restoreReady={savedAt:d.savedAt,state:d.state};view={t:'menu'};render()}
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e});
+const whenText=iso=>{const d=new Date(iso),days=Math.floor((Date.now()-d)/864e5);return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:d.getFullYear()===new Date().getFullYear()?undefined:'numeric'})+(days<1?' (today)':days===1?' (yesterday)':` (${days} days ago)`)};
+function restoreSummary(p){const st=p.state,months=Object.keys(st.tx||{}).filter(k=>(st.tx[k]||[]).length).length;
+ return `${p.savedAt?'Saved '+whenText(p.savedAt)+': ':''}${st.bills.length} categories, ${st.goals.length} garden row${st.goals.length===1?'':'s'}, ${months} month${months===1?'':'s'} of transactions${Object.keys(st.rules||{}).length?`, ${Object.keys(st.rules).length} sorting choices`:''}.`}
+function vMenu(){const un=unsortedOf(month).length,iOS=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+ return `${head('Menu')}<h2>Cozy Budget</h2>${menuMsg?`<p class="msg">${menuMsg}</p>`:''}
+ <div class="card"><h3>Your data</h3><p class="sub">Your budget and transactions are saved only on this device. Nothing is sent to a server, and files you upload are read right here.</p><p class="sub" id="persistLine" style="margin-top:8px">${persistText()}</p></div>
+ <div class="card"><h3>Back up</h3><p class="sub">${meta.lastBackup?`Last backup: ${whenText(meta.lastBackup)}.`:edited?'<span class="warnline">Not backed up yet.</span>':'Nothing to back up yet: this is the sample budget.'} The backup is a file locked with a passcode you choose. Save it to Files, iCloud Drive or Google Drive.</p>
+  <div class="grid2" style="margin-top:10px"><label class="f">Passcode<input type="password" id="bk-pass" autocomplete="new-password" placeholder="6 or more characters"></label><label class="f">Type it again<input type="password" id="bk-pass2" autocomplete="new-password"></label></div>
+  <p class="sub" style="margin-top:8px">There’s no way to recover a forgotten passcode, so keep it somewhere safe.</p>
+  <div class="actions"><button class="btn sm" data-act="backup">Save backup file</button></div></div>
+ <div class="card"><h3>Restore</h3>
+  ${restoreReady?`<p class="sub">${esc(restoreSummary(restoreReady))}</p><p class="sub" style="margin-top:8px"><b>This replaces the budget on this device.</b></p><div class="actions"><button class="btn sm" data-act="restoreApply">Replace with this backup</button><button class="btn sm ghost" data-act="restoreCancel">Cancel</button></div>`
+  :restoreFile?`<p class="sub">Enter the passcode for ${esc(restoreFile.name)}.</p><label class="f" style="margin-top:10px">Passcode<input type="password" id="rs-pass" autocomplete="current-password"></label><div class="actions"><button class="btn sm" data-act="restoreOpen">Open backup</button><button class="btn sm ghost" data-act="restoreCancel">Cancel</button></div>`
+  :`<p class="sub">Bring back a budget from a backup file, on this phone or a new one.</p><label class="drop" style="margin-top:10px"><b style="color:var(--ink)">Choose a backup file</b><span>cozy-budget-backup-….json</span><input type="file" id="rs-file" accept=".json,application/json" style="position:absolute;opacity:0;width:1px;height:1px"></label>`}</div>
+ <div class="card"><h3>Budget and statements</h3><p class="sub">Upload a budget or a bank statement (CSV, Excel, PDF, OFX/QFX), edit your categories, or sort purchases that didn’t match.</p>
+  <div class="actions"><button class="btn sm" data-act="goBudget" data-to="upload">Upload</button><button class="btn sm ghost" data-act="goBudget" data-to="edit">Edit budget</button>${un?`<button class="btn sm ghost" data-act="goBudget" data-to="sort">Sort ${un}</button>`:''}</div></div>
+ <div class="card"><h3>Put it on your home screen</h3><p class="sub">${standalone()?'<span class="okline">✓ You’re using the home-screen app.</span>':installEvt?'Install it like an app. It opens full screen and keeps your data safer from automatic cleanup.':iOS?'In Safari, tap the Share button, then <b>Add to Home Screen</b>. It opens full screen, and Safari won’t clear its data on its own.':'In your browser’s menu, choose <b>Install app</b> or <b>Add to Home screen</b>. It opens full screen and keeps your data safer from automatic cleanup.'}</p>${installEvt&&!standalone()?'<div class="actions"><button class="btn sm" data-act="install">Install</button></div>':''}</div>
+ <div class="card"><h3>Start over</h3><p class="sub">Erase everything on this device and go back to the sample budget.${edited&&backupDue()?' <span class="warnline">Back up first: you don’t have a recent backup.</span>':''}</p>
+  <div class="actions"><button class="btn sm danger" data-act="menuReset">${resetArm?'Tap again to erase everything':'Reset to sample budget'}</button></div></div>`}
 function vPile(){const st=monthStats(month),sm=k=>st.tx.filter(x=>x.k===k).reduce((s,x)=>s+x.amt,0),up=Array.isArray(S.tx[month])&&S.tx[month].length;
  return `${head('Checking account')}<h2>Woodpile &amp; stove</h2><p class="where">Each log is ${fmt(unit)}. Paychecks stack wood; every purchase goes in the stove.</p>
  <div class="big"><b>${st.end<0?'−':''}${fmt(Math.abs(st.end))}</b><span class="pill ${st.end<0?'over':'ok'}">at the end of ${MONTHS[month]}</span></div>
@@ -954,8 +1012,10 @@ function render(){if(!view)return;let html='';
  else if(view.t==='goal')html=vGoal(byId[view.id]);
  else if(view.t==='budget')html=vBudget();
  else if(view.t==='pile')html=vPile();
- const st=sheet.scrollTop;sheet.innerHTML=html;sheet.classList.toggle('wide',view.t==='budget');if(view.keep)sheet.scrollTop=st;else sheet.scrollTop=0;view.keep=false;
+ else if(view.t==='menu')html=vMenu();
+ const st=sheet.scrollTop;sheet.innerHTML=html;sheet.classList.toggle('wide',view.t==='budget'||view.t==='menu');if(view.keep)sheet.scrollTop=st;else sheet.scrollTop=0;view.keep=false;
  sheet.classList.add('open');document.body.classList.add('sheet-open');
+ const rf=document.getElementById('rs-file');if(rf)rf.addEventListener('change',()=>{const file=rf.files[0];if(file)file.text().then(txt=>pickBackup(txt,file.name)).catch(()=>{menuMsg='<span class="warnline">That file couldn’t be read.</span>';render()})});
  const f=document.getElementById('file');if(f){f.addEventListener('change',()=>f.files[0]&&readFile(f.files[0]));const d=document.getElementById('drop');
   ['dragenter','dragover'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add('on')}));['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('on')}));
   d.addEventListener('drop',e=>{const file=e.dataTransfer.files[0];if(file)readFile(file)})}}
@@ -976,6 +1036,19 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
  if(a==='newBillFor'){const key=t.dataset.key,nm=(v('nb-name').value||'').trim().slice(0,60)||prettyKey(key),sp=v('nb-spot').value;
   const b={id:uid(),name:nm,cat:'custom',budget:num(v('nb-budget').value),a:[0,0,0],due:'',note:'',spot:null};S.bills.push(b);if(sp&&SPOTS[sp]&&!billAt(sp))b.spot=sp;
   sortNew=null;return sortAssign(key,'b:'+b.id)}
+ if(a==='backup'){const p1=v('bk-pass').value,p2=v('bk-pass2').value;
+  if(p1.length<6){menuMsg='<span class="warnline">Choose a passcode with at least 6 characters.</span>';view.keep=true;return render()}
+  if(p1!==p2){menuMsg='<span class="warnline">The two passcodes don’t match.</span>';view.keep=true;return render()}
+  t.disabled=true;t.textContent='Locking…';
+  makeBackup(p1).then(txt=>deliverFile(txt,`cozy-budget-backup-${new Date().toISOString().slice(0,10)}.json`)).then(ok=>{if(ok){meta.lastBackup=new Date().toISOString();saveMeta();updateMenuDot();askPersist();menuMsg='<span class="okline">✓ Backup saved.</span> Keep the file and your passcode somewhere safe.'}else menuMsg='Backup cancelled.';view.keep=true;render()})
+   .catch(()=>{menuMsg='<span class="warnline">The backup couldn’t be made in this browser.</span>';view.keep=true;render()});return}
+ if(a==='restoreOpen'&&restoreFile){t.disabled=true;t.textContent='Opening…';openBackup(restoreFile.data,v('rs-pass').value).then(p=>{if(!p||!validState(p.state))throw{msg:'That backup file looks damaged.'};restoreReady=p;menuMsg='';view.keep=true;render()})
+   .catch(err=>{menuMsg=`<span class="warnline">${err&&err.msg?err.msg:'That backup couldn’t be opened.'}</span>`;view.keep=true;render()});return}
+ if(a==='restoreApply'&&restoreReady){if(anim)stopAnim();S=migrate(restoreReady.state);if(!S.rules)S.rules={};restoreReady=null;restoreFile=null;save(true);buildGarden();applyMonth(false);updateMenuDot();menuMsg='<span class="okline">✓ Restored.</span> Your budget is back.';view.keep=true;return render()}
+ if(a==='restoreCancel'){restoreFile=null;restoreReady=null;menuMsg='';view.keep=true;return render()}
+ if(a==='goBudget'){menuMsg='';budgetTab=t.dataset.to;return open({t:'budget'})}
+ if(a==='install'&&installEvt){installEvt.prompt();installEvt.userChoice.finally(()=>{installEvt=null;view.keep=true;render()});return}
+ if(a==='menuReset'){if(!resetArm){resetArm=true;view.keep=true;return render()}resetArm=false;if(anim)stopAnim();S=clone(SAMPLE);S.rules={};edited=false;buildGarden();try{localStorage.removeItem(KEY)}catch(err){}applyMonth(false);updateMenuDot();menuMsg='Back to the sample budget.';view.keep=true;return render()}
  if(a==='pdfImport'&&pendingPDF){const p=pendingPDF;pendingPDF=null;try{importText(null,p.nm,p.rows)}catch(err){uploadMsg='Those transactions couldn’t be imported.';render()}return}
  if(a==='pdfCancel'){pendingPDF=null;uploadMsg='';view.keep=true;return render()}
  if(a==='addSetHere'){const c=t.dataset.cat;if(billOfCat(c))return;const amt=num(v('h-budget').value);const b={id:uid(),name:SETBY[c].name,cat:c,budget:amt,a:[amt,amt,amt],due:'',note:'',spot:null};S.bills.push(b);assign(b,t.dataset.spot);save(true);applyMonth(false);open({t:'bill',id:b.id})}
@@ -1012,6 +1085,7 @@ sheet.addEventListener('change',e=>{const el=e.target;if(el.id==='sortRemember')
  if(ed==='gacct')G.account=el.value.trim().slice(0,40);
  save(!['spent','income','incomeAll','gsaved'].includes(ed));applyMonth(false)});
 document.getElementById('sortBtn').addEventListener('click',()=>{if(anim)stopAnim();selected=null;flyTo(null);budgetTab='sort';open({t:'budget'})});
+document.getElementById('menuBtn').addEventListener('click',()=>{if(anim)stopAnim();selected=null;flyTo(null);menuMsg='';resetArm=false;open({t:'menu'})});
 document.getElementById('budgetBtn').addEventListener('click',()=>{if(anim)stopAnim();selected=null;flyTo(null);budgetTab='overview';open({t:'budget'})});
 addEventListener('keydown',e=>{if(e.target.matches&&e.target.matches('input,select,textarea,button'))return;if(e.key===' '&&anim&&!anim.done){e.preventDefault();anim.paused=!anim.paused;updatePlaybar();return}if(e.key==='Escape'){if(view)close();else if(anim)stopAnim()}if(e.key==='ArrowLeft'&&month>0){if(anim)stopAnim();month--;applyMonth()}if(e.key==='ArrowRight'&&month<2){if(anim)stopAnim();month++;applyMonth()}});
 
@@ -1129,6 +1203,7 @@ async function readFile(file){const nm=file.name||'file';pendingPDF=null;uploadM
   if(/\.pdf$/i.test(nm)||head.startsWith('%PDF'))return await readPDF(buf,nm);
   if(/\.(xlsx|xlsm|xlsb|xls|ods|numbers)$/i.test(nm)||head.startsWith('PK'))return await readXLSX(buf,nm);
   const text=new TextDecoder().decode(buf);
+  if(/"app"\s*:\s*"cozy-budget-backup"/.test(text.slice(0,300))){pickBackup(text,nm);return}
   if(/\.(ofx|qfx|qbo)$/i.test(nm)||/OFXHEADER|<OFX>/i.test(text.slice(0,3000)))return importText(null,nm,ofxRows(text));
   importText(text,nm)}
  catch(err){uploadMsg=err&&err.msg?err.msg:'That file couldn’t be read. Check that it’s a bank statement or a budget with a name and an amount on each row.';budgetTab='upload';render()}}
@@ -1317,6 +1392,7 @@ for(const s of slots){s.cur=s.target;s.delay=0}
 tankLevel=S.tank.goal?clamp(balance(S.tank,month)/S.tank.goal,0,1):0;
 {const r=activeRow();gardener.row=r;if(r>=0){gardener.g.position.set(rows[r].lane,0.25,pickSlotZ(r));gardener.path=[];gardener.state='water';gardener.timer=2}}
 restPile();pileShown=pileTarget;logs.forEach((l,i)=>l.g.visible=i<pileShown);
+updateMenuDot();if(edited)askPersist();
 if(document.fonts)document.fonts.ready.then(()=>{for(const k in COINS){coinDraw(coin[k].c.getContext('2d'),...COINS[k]);coin[k].t.needsUpdate=true}S.goals.forEach((g,i)=>packetDraw(i,month));plaqueDraw(month)});
 
 tick();
