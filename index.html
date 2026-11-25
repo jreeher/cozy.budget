@@ -256,8 +256,6 @@ const GOAL_LOOK=[
  {icon:'tent',plant:'sunflower',color:'#b4e09f',ink:'#2d5a24'},
  {icon:'gift',plant:'pine',color:'#f7b3c8',ink:'#7b2346'},
  {icon:'bike',plant:'tulip',color:'#ffd978',ink:'#6e4210'}];
-/* Private budget behind five quick taps on the Sample budget tag: the exact state the site's own importer produced from Jordan's budget CSV and statement CSV (set categories first, then custom). Strip with tools/make_public.py before copying to the public repo. */
-const SECRET=/*SECRET-START*/null/*SECRET-END*/;
 const KEY='budget-house-v3';
 const clone=o=>JSON.parse(JSON.stringify(o));
 let S=clone(SAMPLE),edited=false;
@@ -643,9 +641,6 @@ function buildGarden(){const shared=new Set(Object.values(matCache)),sharedG=new
   const h=reg(hg,'hoe',{kind:'hoe'});byId.hoe=h;
   const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:coin.idea.t,depthTest:false,transparent:true}));sp.renderOrder=10;sp.scale.set(0.9,0.9,1);sp.position.set(hx+0.35,3.4,hz);sp.userData.hot=h;sp.userData.y=3.4;gardenG.add(sp);h.badge=sp;targets.push(sp)}
  gardenTargets();snapGarden();S.goals.forEach((g,i)=>packetDraw(i,month));applyLayout()}
-/* tapping the Sample budget tag five times quickly loads the private budget */
-{let taps=[];document.getElementById('sampleTag').addEventListener('click',()=>{const now=Date.now();taps=taps.filter(t=>now-t<2500);taps.push(now);if(taps.length>=5){taps=[];loadSecret()}})}
-function loadSecret(){if(!SECRET)return;if(anim)stopAnim();S=migrate(clone(SECRET));if(!S.rules)S.rules={};edited=true;save(true);buildGarden();month=1;applyMonth(false);selected=null;flyTo(null);budgetTab='overview';open({t:'budget'})}
 function addGoalRow(){if(S.goals.length>=6)return false;S.goals.push({name:'New goal',goal:1000,start:0,target:50,a:[0,0,0],account:''});buildGarden();save(true);applyMonth(false);return true}
 function hoeAddRow(){if(anim)stopAnim();if(!addGoalRow())return;selected=null;flyTo(null);budgetTab='edit';open({t:'budget'});
  const ins=sheet.querySelectorAll('[data-ed=gname]'),last=ins[ins.length-1];if(last){last.scrollIntoView({block:'center'});last.focus({preventScroll:true});last.select()}}
@@ -866,7 +861,7 @@ const layout=()=>S.layout||(S.layout={hidden:[],moved:{},added:[]});
 let mv=null;const fpMesh=new THREE.Mesh(new THREE.PlaneGeometry(1,1),B('#5fc58b',{transparent:true,opacity:.62,depthWrite:false}));fpMesh.rotation.x=-Math.PI/2;fpMesh.visible=false;fpMesh.renderOrder=5;world.add(fpMesh);
 function fits(h){const r=rectOf(h),pts=[[r[0],r[2]],[r[1],r[2]],[r[0],r[3]],[r[1],r[3]],[(r[0]+r[1])/2,(r[2]+r[3])/2]];
  if(!pts.every(([x,z])=>GROUND.some(G=>inR(G,x,z))))return false;if(WALLS.some(w=>ov(r,w)))return false;
- for(const o of hot){if(o===h||o.hidden||o.kind==='secret')continue;const q=rectOf(o);if(q&&ov(r,q,0.06))return false}
+ for(const o of hot){if(o===h||o.hidden)continue;const q=rectOf(o);if(q&&ov(r,q,0.06))return false}
  for(const row of rows){const hw=S.goals.length<=4?1.0:0.75;if(ov(r,[row.x-hw,row.x+hw,-11.1,10.6]))return false}return true}
 function showFp(){const h=mv.h,r=rectOf(h);fpMesh.scale.set(r[1]-r[0]+0.2,r[3]-r[2]+0.2,1);fpMesh.position.set((r[0]+r[1])/2,floorAt((r[0]+r[1])/2,(r[2]+r[3])/2)+0.04,(r[2]+r[3])/2);
  mv.ok=fits(h);fpMesh.material.color.set(mv.ok?'#5fc58b':'#f0707a');fpMesh.visible=true;
@@ -1125,7 +1120,7 @@ function render(){if(!view)return;let html='';
   d.addEventListener('drop',e=>{const file=e.dataTransfer.files[0];if(file)readFile(file)})}}
 function open(v){view=v;render()}
 function close(){sheet.classList.remove('open');document.body.classList.remove('sheet-open');view=null;selected=null;flyTo(null)}
-function select(id){const h=byId[id];if(!h)return;if(h.kind==='hoe')return hoeAddRow();if(h.kind==='secret')return loadSecret();selected=h;
+function select(id){const h=byId[id];if(!h)return;if(h.kind==='hoe')return hoeAddRow();selected=h;
  if(h.kind==='spot'){const b=billAt(id);open(b?{t:'bill',id:b.id}:{t:'spot',id})}else if(h.kind==='pile')open({t:'pile'});else open({t:'goal',id});flyTo(h)}
 function pick(id){if(id==='__sort'){budgetTab='sort';return open({t:'budget'})}if(byId[id])return select(id);const b=billById(id);if(!b)return;if(b.spot&&SPOTS[b.spot])select(b.spot);else{selected=null;open({t:'bill',id})}}
 function assign(b,sid){if(sid){const other=billAt(sid);if(other&&other!==b)other.spot=null}b.spot=sid||null}
@@ -1489,7 +1484,7 @@ function tick(){const dt=Math.min(clock.getDelta(),0.05),t=clock.elapsedTime,k=1
  for(const h of hot){const sel=selected===h,hov=hovered===h;
   if(h.kind==='goal'){h.g.rotation.z=reduce?0:Math.sin(t*1.3+h.phase)*0.05;const gs=sel?1.2:1;h.g.scale.setScalar(h.g.scale.x+(gs-h.g.scale.x)*k);continue}
   if(h.kind==='hoe'){h.badge.position.y=h.badge.userData.y+(reduce?0:Math.sin(t*2)*0.12);for(const m of h.mats)m.emissiveIntensity=hov?0.18:0;continue}
-  if(h.kind==='tank'||h.kind==='pile'||h.kind==='secret')continue;
+  if(h.kind==='tank'||h.kind==='pile')continue;
   const pu=h.pulse>0?Math.sin(h.pulse*Math.PI):0;if(h.pulse>0)h.pulse=Math.max(0,h.pulse-dt*1.3);
   h.g.scale.setScalar(h.base*(1+(sel?0.04:0)+pu*0.14));
   for(const m of h.mats){m.emissiveIntensity=pu>0?pu*0.55:sel?0.28:hov?0.14:0;if(pu>0)m.emissive.set(h.pulseOver?'#f0707a':'#7fb8ec');else if(sel||hov)m.emissive.set('#b9a7ea')}
