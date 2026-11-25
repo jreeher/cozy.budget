@@ -977,8 +977,8 @@ function segments(){const inc=S.income[month]||0;
  const used=[...items,...sav].reduce((s,x)=>s+x.v,0);return {inc,items,sav,used,left:inc-used}}
 /* ---------- Getting started: the house shows a made-up budget until you bring in your own ---------- */
 function vStart(){return `${head('Get started')}<h2>Make it your own</h2><p class="sub">The house is showing a made-up example budget. Bring in yours and every object, garden row and number becomes your own. Everything stays on this device.</p>
- <div class="card"><h3>1. Upload your budget</h3><p class="sub">A spreadsheet or CSV with your monthly bills and amounts, in any layout. Each line is matched to a set category with its own spot in the house; anything that doesn’t fit becomes a custom category you place yourself. Savings lines become garden rows.</p>
-  <label class="drop" id="drop" style="margin-top:10px"><b style="color:var(--ink)">Choose your budget</b><span>Excel or CSV</span><input type="file" id="file" accept=".csv,.xlsx,.xls,.xlsm,.ods,.json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="position:absolute;opacity:0;width:1px;height:1px"></label></div>
+ <div class="card"><h3>1. Upload your budget</h3><p class="sub">A spreadsheet, CSV or PDF with your monthly bills and amounts, in any layout. Each line is matched to a set category with its own spot in the house; anything that doesn’t fit becomes a custom category you place yourself. Savings lines become garden rows.</p>
+  <label class="drop" id="drop" style="margin-top:10px"><b style="color:var(--ink)">Choose your budget</b><span>Excel, CSV or PDF</span><input type="file" id="file" accept=".csv,.xlsx,.xls,.xlsm,.ods,.json,.pdf,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="position:absolute;opacity:0;width:1px;height:1px"></label></div>
  <div class="card"><h3>2. Then add a bank statement</h3><p class="sub">After your budget is in, upload a month of transactions (PDF statement, CSV or OFX/QFX) from Budget → Upload. Purchases land on the right objects and the month plays back day by day.</p></div>
  <div class="card"><h3>No spreadsheet?</h3><p class="sub">Start with an empty house and add your categories and savings goals by hand.</p><div class="actions"><button class="btn sm ghost" data-act="startBlank">Start from scratch</button><button class="btn sm ghost" data-act="goMenuRestore">Restore a backup</button></div></div>`}
 /* ---------- Menu: backup, restore, storage, uploads ---------- */
@@ -1183,7 +1183,7 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
  if(a==='copyCsv'){const txt=toCSV(),ta=v('tpl');const done=()=>{t.textContent='Copied';setTimeout(()=>t.textContent='Copy current budget as CSV',1600)};
   const fallback=()=>{ta.focus();ta.select();t.textContent='Selected · copy it from the box'};
   try{navigator.clipboard.writeText(txt).then(done,fallback)}catch(err){fallback()}}});
-sheet.addEventListener('change',e=>{const el=e.target;if(el.id==='sortRemember'){sortRemember=el.checked;return}if(el.dataset.sheet){try{importSheet(el.value)}catch(err){uploadMsg=err&&err.msg?err.msg:'That sheet couldn’t be read.';render()}return}if(el.dataset.sortkey!=null){const v=el.value;if(v==='new'){sortNew=el.dataset.sortkey;view.keep=true;return render()}
+sheet.addEventListener('change',e=>{const el=e.target;if(el.id==='sortRemember'){sortRemember=el.checked;return}if(el.dataset.pdfpage){try{importPdfPage(+el.value)}catch(err){uploadMsg=err&&err.msg?err.msg:'That page couldn’t be read.';render()}return}if(el.dataset.sheet){try{importSheet(el.value)}catch(err){uploadMsg=err&&err.msg?err.msg:'That sheet couldn’t be read.';render()}return}if(el.dataset.sortkey!=null){const v=el.value;if(v==='new'){sortNew=el.dataset.sortkey;view.keep=true;return render()}
   if(v.startsWith('s:')){const c=v.slice(2),grp=groupsFor(month).find(x=>x.key===el.dataset.sortkey),amt=grp?Math.round(grp.total):0;let b=billOfCat(c);
    if(!b){b={id:uid(),name:SETBY[c].name,cat:c,budget:amt,a:[0,0,0],due:'',note:'',spot:null};S.bills.push(b);placeSet(b)}sortNew=null;return sortAssign(el.dataset.sortkey,'b:'+b.id)}if(v){sortNew=null;sortAssign(el.dataset.sortkey,v)}return}const ed=el.dataset.ed;if(!ed)return;const i=+el.dataset.i,g=+el.dataset.g,G=g===0?S.tank:S.goals[g-1];
  if(ed==='income'){const val=num(el.value);if(sheet.querySelector('[data-ed=incomeAll]').value==='all')S.income=S.income.map(()=>val);else S.income[month]=val}
@@ -1280,7 +1280,11 @@ async function readPDF(buf,nm){await lib('pdf');const pj=window.pdfjsLib;pj.Glob
  const doc=await pj.getDocument({data:new Uint8Array(buf)}).promise;const pages=[];let full='';
  for(let p=1;p<=doc.numPages;p++){const tc=await (await doc.getPage(p)).getTextContent();pages.push(tc.items.map(i=>({s:i.str,x:i.transform[4],y:i.transform[5],w:i.width})));full+=tc.items.map(i=>i.str).join(' ')+'\n'}
  if(!full.replace(/\s/g,'').length)throw{msg:'That PDF is a scanned picture with no text inside, so it can’t be read. Download the statement from your bank’s website instead, or use its CSV or OFX/QFX export.'};
- const r=pdfStatementRows(pages,full);if(!r.rows.length)throw{msg:'No transactions were found in that PDF. If it’s a bank statement, try its CSV or OFX/QFX download instead.'};
+ const r=pdfStatementRows(pages,full);
+ if(r.rows.length<3){/* not a statement: maybe a budget saved as PDF (each page like a sheet; the first one that has a budget is used) */
+  const good=pages.map((p,i)=>pdfBudgetRows(p)?i:-1).filter(i=>i>=0);
+  if(good.length){lastPDF={nm,pages,good};return importPdfPage(good[0])}
+  throw{msg:'No budget lines or bank transactions were found in that PDF. A budget needs a name and an amount on each line; for a bank statement, try its CSV or OFX/QFX download instead.'}}
  pendingPDF={nm,rows:[['date','description','amount'],...r.rows]};
  const tin=r.rows.reduce((t,x)=>t+Math.max(0,+x[2]),0),tout=r.rows.reduce((t,x)=>t+Math.max(0,-x[2]),0);
  const check=r.checked?(r.agree===r.checked?`<br>✓ Every line matches the statement’s running balance, so the amounts and signs are right.`:`<br><b>${r.checked-r.agree} of ${r.checked} lines don’t match the statement’s running balance</b>, so some amounts may be off. Look them over below.`):'<br>This statement has no running balance to check against, so look over the amounts below.';
@@ -1296,10 +1300,30 @@ function ofxRows(t){const ent=x=>x.replace(/&amp;/g,'&').replace(/&lt;/g,'<').re
 function takeHome(rows){for(let r=0;r<rows.length;r++)for(let c=0;c<rows[r].length;c++){if(!/take.?home|net pay|net income/i.test(rows[r][c]))continue;
   if(isNum(rows[r][c+1]))return num(rows[r][c+1]);const cand=[];
   for(let k=r+1;k<Math.min(rows.length,r+10);k++){const v=rows[k][c];if(!isNum(v))continue;cand.push({v:num(v),lab:rows[k].slice(0,c).filter(x=>/[a-z]/i.test(x)).join(' ')})}
-  if(!cand.length)continue;const f=re=>cand.find(x=>re.test(x.lab)),r2=v=>Math.round(v*100)/100;let x;
-  if(x=f(/month/i))return x.v;if(x=f(/total/i))return x.v;x=cand[0];
-  if(/bi-?weekly|every (two|2) weeks/i.test(x.lab))return r2(x.v*26/12);if(/semi-?monthly|twice a month/i.test(x.lab))return x.v*2;if(/week/i.test(x.lab))return r2(x.v*52/12);if(/year|annual/i.test(x.lab))return r2(x.v/12);return x.v}
+  if(cand.length)return pickTakeHome(cand)}
  return 0}
+/* several numbers under a "Take home" heading: prefer the monthly one, then a total, else convert a paycheck to a month */
+function pickTakeHome(cand){const f=re=>cand.find(x=>re.test(x.lab)),r2=v=>Math.round(v*100)/100;let x;
+ if(x=f(/month/i))return x.v;if(x=f(/total/i))return x.v;x=cand[0];
+ if(/bi-?weekly|every (two|2) weeks/i.test(x.lab))return r2(x.v*26/12);if(/semi-?monthly|twice a month/i.test(x.lab))return x.v*2;if(/week/i.test(x.lab))return r2(x.v*52/12);if(/year|annual/i.test(x.lab))return r2(x.v/12);return x.v}
+/* a budget saved as PDF: on each page, find the column of labels that have an amount right beside them (like a spreadsheet's) */
+function pdfLines(items){const lines=[];items.filter(i=>i.s.trim()).sort((a,b)=>b.y-a.y||a.x-b.x).forEach(i=>{const L=lines.find(l=>Math.abs(l.y-i.y)<=2.5);if(L)L.items.push(i);else lines.push({y:i.y,items:[i]})});
+ return lines.sort((a,b)=>b.y-a.y).map(l=>{const out=[];for(const i of l.items.sort((a,b)=>a.x-b.x)){const t=i.s.trim(),p=out[out.length-1];
+  if(p&&!isNum(p.s)&&!isNum(t)&&i.x-(p.x+p.w)<8){p.s+=' '+t;p.w=i.x+i.w-p.x}else out.push({s:t,x:i.x,w:i.w})}return out})}
+function pdfBudgetRows(items){const lines=pdfLines(items),pairs=[],lab=t=>/[a-z]/i.test(t)&&!isNum(t);
+ lines.forEach(l=>l.forEach((it,k)=>{const n=l[k+1];if(lab(it.s)&&n&&isNum(n.s))pairs.push({l:it.s,v:n.s,x:it.x})}));
+ const bin=x=>Math.round(x/12),cnt={};pairs.forEach(p=>{for(const d of [-1,0,1])cnt[bin(p.x)+d]=(cnt[bin(p.x)+d]||0)+1});
+ const best=+Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0],use=pairs.filter(p=>Math.abs(bin(p.x)-best)<=1);if(use.length<3)return null;
+ const rows=[['name','budget'],...use.map(p=>[p.l,p.v.replace(/[$,]/g,'')])];
+ for(let r=0;r<lines.length;r++)for(const h of lines[r]){if(!/take.?home|net pay|net income/i.test(h.s))continue;const k=lines[r].indexOf(h),n=lines[r][k+1];
+  let inc=0;if(n&&isNum(n.s)&&n.x-(h.x+h.w)<40)inc=num(n.s);
+  else{const cand=[];for(let q=r+1;q<Math.min(lines.length,r+10);q++){const hc=h.x+h.w/2,it=lines[q].filter(z=>isNum(z.s)).sort((a,b)=>Math.abs(a.x+a.w/2-hc)-Math.abs(b.x+b.w/2-hc))[0];/* the number under the heading, not one in a neighbouring column */
+   if(it&&Math.abs(it.x+it.w/2-hc)<Math.max(h.w*0.75,30))cand.push({v:num(it.s),lab:lines[q].filter(z=>z.x<it.x&&lab(z.s)).map(z=>z.s).join(' ')})}if(cand.length)inc=pickTakeHome(cand)}
+  if(inc){rows.push(['Take-home pay',String(inc)]);return rows}}
+ return rows}
+let lastPDF=null;
+function importPdfPage(i){const rows=pdfBudgetRows(lastPDF.pages[i]);if(!rows)throw{msg:`Couldn’t find a budget on page ${i+1}.`+pdfPagePicker(i)};importText(null,lastPDF.nm,rows);if(lastPDF.good.length>1){uploadMsg+=pdfPagePicker(i);render()}}
+const pdfPagePicker=cur=>lastPDF&&lastPDF.good.length>1?`<label class="f" style="margin-top:10px">Page used from ${esc(lastPDF.nm)}<select data-pdfpage="1">${lastPDF.good.map(i=>`<option value="${i}" ${i===cur?'selected':''}>Page ${i+1}</option>`).join('')}</select></label>`:'';
 function tableFromGrid(rows){
  for(let i=0;i<Math.min(rows.length,15);i++){const h=rows[i].map(c=>String(c).toLowerCase().trim());
   const tx=h.some(x=>/^(trans(action)?\.?\s*)?date|posted/.test(x))&&h.some(x=>/amount|debit|credit|withdraw|deposit/.test(x)),bud=h.some(x=>/^(name|item|category|expense|description|bill|payee)/.test(x))&&h.some(x=>/budget|planned|amount|spent|actual|limit/.test(x));
