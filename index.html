@@ -906,9 +906,12 @@ async function openBackup(file,pass){if(!file.encrypted)return file.payload||fil
  try{plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64d(file.cipher.iv)},key,b64d(file.data))}catch(e){throw{msg:'That passcode doesn’t open this backup. Check it and try again.'}}
  return JSON.parse(new TextDecoder().decode(plain))}
 const validState=v=>v&&Array.isArray(v.bills)&&v.tank&&Array.isArray(v.goals)&&v.goals.length<=6&&Array.isArray(v.income)&&v.income.length===3;
+/* inside the Claude artifact viewer, files go through its downloads capability; on the real site a normal download (or the phone's share sheet) is used */
+let dlNS=null;try{if(window.claude&&window.claude.use)window.claude.use('downloads').then(n=>{dlNS=n}).catch(()=>{})}catch(e){}
 async function deliverFile(text,fname){const blob=new Blob([text],{type:'application/json'});
  try{const f=new File([blob],fname,{type:'application/json'});if(coarse&&navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:'Cozy Budget backup'});return true}}
  catch(e){if(e&&e.name==='AbortError')return false}
+ if(dlNS){try{await dlNS.save({filename:fname,data:text});return true}catch(e){return false}}
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);return true}
 let menuMsg='',restoreFile=null,restoreReady=null,resetArm=false,installEvt=null;
 function pickBackup(txt,name){let d;try{d=JSON.parse(txt)}catch(e){d=null}
