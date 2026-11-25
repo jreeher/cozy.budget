@@ -940,8 +940,8 @@ function vBudget(){const hasTx=Array.isArray(S.tx[month])&&S.tx[month].length;if
   <p class="sub" style="margin-top:10px">When you upload transactions, transfers to a row’s bank account (matched by its name or last four digits) fill that row.</p>
   <div class="actions">${S.goals.length<6?'<button class="btn sm ghost" data-act="addGoal">+ Add garden row</button>':''}<button class="btn sm danger" data-act="reset">Reset to sample budget</button></div>`}
  else if(budgetTab==='sort')body=vSort();
- else{body=`<p class="sub" style="margin-top:12px"><b>Bank transactions</b> (date, description, amount): the month plays back day by day and each purchase lands on a matching object (Safeway → fridge, Shell → gas can, Netflix → TV). <b>A budget</b> (name, category, budget, spent) replaces your categories instead: each line is matched to a set category, and anything that doesn’t fit becomes a custom category you place in the house. CSV or JSON.</p>
-  <label class="drop" id="drop" style="margin-top:12px"><b style="color:var(--ink)">Choose a file</b><span>or drop it here · .csv or .json</span><input type="file" id="file" accept=".csv,.json,text/csv,application/json" style="position:absolute;opacity:0;width:1px;height:1px"></label>
+ else{body=`<p class="sub" style="margin-top:12px"><b>Bank transactions</b> (date, description, amount): the month plays back day by day and each purchase lands on a matching object (Safeway → fridge, Shell → gas can, Netflix → TV). <b>A budget</b> (name, category, budget, spent) replaces your categories instead: each line is matched to a set category, and anything that doesn’t fit becomes a custom category you place in the house.</p><p class="sub">Works with CSV, Excel (any sheet layout with names and amounts), PDF bank statements, OFX/QFX downloads (the “Quicken” or “Money” export most banks offer) and JSON. Files are read on this device and never uploaded.</p>
+  <label class="drop" id="drop" style="margin-top:12px"><b style="color:var(--ink)">Choose a file</b><span>or drop it here · CSV, Excel, PDF statement, OFX/QFX or JSON</span><input type="file" id="file" accept=".csv,.json,.xlsx,.xls,.xlsm,.ods,.pdf,.ofx,.qfx,.qbo,text/csv,application/json,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="position:absolute;opacity:0;width:1px;height:1px"></label>
   ${uploadMsg?`<p class="msg">${uploadMsg}</p>`:''}${homelessHTML()}
   <p class="sub" style="margin-top:10px">Transactions look like <code>2026-11-03,SAFEWAY #1542,-84.12</code>: deposits positive, spending negative. Separate debit and credit columns work too, and transfers mentioning savings or a goal’s name fill that goal.</p>
   <h3>Budget CSV format</h3><p class="sub">Lines with “savings”, “retirement”, “401k”, “IRA” or “investment” in the name become garden rows, and an “emergency fund” line fills the water tower. Total lines and blank amounts are skipped.</p><p class="sub">Columns: <b>name, category, budget, spent</b>. Add a row named “Take-home pay” for income, and rows with category “Savings” for the water tower (“Emergency fund”) and the four garden rows. Here’s your current budget in that format:</p>
@@ -976,6 +976,8 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
  if(a==='newBillFor'){const key=t.dataset.key,nm=(v('nb-name').value||'').trim().slice(0,60)||prettyKey(key),sp=v('nb-spot').value;
   const b={id:uid(),name:nm,cat:'custom',budget:num(v('nb-budget').value),a:[0,0,0],due:'',note:'',spot:null};S.bills.push(b);if(sp&&SPOTS[sp]&&!billAt(sp))b.spot=sp;
   sortNew=null;return sortAssign(key,'b:'+b.id)}
+ if(a==='pdfImport'&&pendingPDF){const p=pendingPDF;pendingPDF=null;try{importText(null,p.nm,p.rows)}catch(err){uploadMsg='Those transactions couldn’t be imported.';render()}return}
+ if(a==='pdfCancel'){pendingPDF=null;uploadMsg='';view.keep=true;return render()}
  if(a==='addSetHere'){const c=t.dataset.cat;if(billOfCat(c))return;const amt=num(v('h-budget').value);const b={id:uid(),name:SETBY[c].name,cat:c,budget:amt,a:[amt,amt,amt],due:'',note:'',spot:null};S.bills.push(b);assign(b,t.dataset.spot);save(true);applyMonth(false);open({t:'bill',id:b.id})}
  if(a==='saveBill'){const b=billById(t.dataset.id),sp0=b.a[month];b.name=v('e-name').value.trim()||b.name;b.budget=num(v('e-budget').value);b.a[month]=num(v('e-spent').value);assign(b,v('e-spot').value||null);const nc=v('e-cat').value,dst=nc!=='custom'&&S.bills.find(x=>x.cat===nc&&x!==b);
   if(dst){mergeInto(S,b,dst);S.bills=S.bills.filter(x=>x!==b);save(true);applyMonth(false);if(dst.spot){selected=SPOTS[dst.spot];flyTo(selected)}return open({t:'bill',id:dst.id})}b.cat=nc;if(nc!=='custom'&&!b.spot)placeSet(b);save(b.a[month]===sp0);applyMonth(false);
@@ -992,7 +994,7 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
  if(a==='copyCsv'){const txt=toCSV(),ta=v('tpl');const done=()=>{t.textContent='Copied';setTimeout(()=>t.textContent='Copy current budget as CSV',1600)};
   const fallback=()=>{ta.focus();ta.select();t.textContent='Selected · copy it from the box'};
   try{navigator.clipboard.writeText(txt).then(done,fallback)}catch(err){fallback()}}});
-sheet.addEventListener('change',e=>{const el=e.target;if(el.id==='sortRemember'){sortRemember=el.checked;return}if(el.dataset.sortkey!=null){const v=el.value;if(v==='new'){sortNew=el.dataset.sortkey;view.keep=true;return render()}
+sheet.addEventListener('change',e=>{const el=e.target;if(el.id==='sortRemember'){sortRemember=el.checked;return}if(el.dataset.sheet){try{importSheet(el.value)}catch(err){uploadMsg=err&&err.msg?err.msg:'That sheet couldn’t be read.';render()}return}if(el.dataset.sortkey!=null){const v=el.value;if(v==='new'){sortNew=el.dataset.sortkey;view.keep=true;return render()}
   if(v.startsWith('s:')){const c=v.slice(2),grp=groupsFor(month).find(x=>x.key===el.dataset.sortkey),amt=grp?Math.round(grp.total):0;let b=billOfCat(c);
    if(!b){b={id:uid(),name:SETBY[c].name,cat:c,budget:amt,a:[0,0,0],due:'',note:'',spot:null};S.bills.push(b);placeSet(b)}sortNew=null;return sortAssign(el.dataset.sortkey,'b:'+b.id)}if(v){sortNew=null;sortAssign(el.dataset.sortkey,v)}return}const ed=el.dataset.ed;if(!ed)return;const i=+el.dataset.i,g=+el.dataset.g,G=g===0?S.tank:S.goals[g-1];
  if(ed==='income'){const val=num(el.value);if(sheet.querySelector('[data-ed=incomeAll]').value==='all')S.income=S.income.map(()=>val);else S.income[month]=val}
@@ -1026,7 +1028,110 @@ const SPARE=['sofa','plant','tub','toilet','kidbed'];
 function freeSpots(){const used=new Set(S.bills.map(b=>b.spot).filter(Boolean)),inUse=new Set(S.bills.map(b=>b.cat));
  return [...SPARE,...Object.keys(SPOTS).filter(x=>!SPARE.includes(x)).sort((a,b)=>(inUse.has(SPOTS[a].home)?1:0)-(inUse.has(SPOTS[b].home)?1:0))].filter(x=>SPOTS[x]&&!used.has(x))}
 function placeSet(b){if(b.cat==='custom'||b.spot)return;const home=SETBY[b.cat].spot;if(SPOTS[home]&&!billAt(home)){b.spot=home;return}const f=freeSpots().filter(x=>!SPOTS[x].home||!billOfCat(SPOTS[x].home));b.spot=f[0]||null}
-function readFile(file){const r=new FileReader();r.onload=()=>{try{importText(String(r.result),file.name)}catch(err){uploadMsg='That file couldn’t be read. Check that it’s a CSV or JSON file with a name and an amount on each row.';render()}};r.readAsText(file)}
+/* ---------- Excel, PDF and OFX/QFX: read in the browser (nothing is uploaded anywhere), then handed to the same importer as a CSV ---------- */
+const LIBS={xlsx:'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',pdf:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',pdfWorker:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'};
+const libP={};function lib(k){return libP[k]||(libP[k]=new Promise((res,rej)=>{const sc=document.createElement('script');sc.src=LIBS[k];sc.onload=res;sc.onerror=()=>{delete libP[k];rej({msg:'The file reader couldn’t load. Check your internet connection and try again.'})};document.head.appendChild(sc)}))}
+const isNum=v=>v!=null&&String(v).trim()!==''&&/^\(?-?\$?[\d,]*\.?\d+\)?$/.test(String(v).trim());
+const money2=v=>'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const dayLabel=iso=>{const [y,m,d]=iso.split('-').map(Number);return new Date(y,m-1,d).toLocaleDateString('en-US',{month:'short',day:'numeric'})};
+/* Statement PDF → transaction rows. Works from where text sits on the page, not from any one bank's wording:
+   rows that start with a date, have words, and end in amounts are transactions; wrapped lines are joined;
+   a running-balance column (if there is one) decides the sign and is used to check every line. */
+function pdfStatementRows(pages,fullText){
+ const MONEY=/^\(?-?\$?(\d{1,3}(,\d{3})+|\d+)\.\d{2}\)?-?$/,DATE=/^(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?$|^(\d{4})-(\d{2})-(\d{2})$|^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:,?\s+(\d{4}))?$/i;
+ const MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+ const moneyVal=s=>{let neg=/^\(.*\)$/.test(s)||/^-|-$/.test(s);const v=parseFloat(s.replace(/[()$,\-]/g,''));return neg?-v:v};
+ /* the statement's own year(s), for dates printed without one */
+ const yrs=[...fullText.matchAll(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2})\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+(20\d{2})\b/gi)].map(m=>({y:+(m[3]||m[5]),mo:m[1]?+m[1]:MON[m[4].slice(0,3).toLowerCase()]}));
+ const endY=yrs.length?Math.max(...yrs.map(x=>x.y)):new Date().getFullYear(),endMo=yrs.length?Math.max(...yrs.filter(x=>x.y===endY).map(x=>x.mo)):12;
+ const toDate=m=>{let y,mo,d;if(m[4]){y=+m[4];mo=+m[5];d=+m[6]}else if(m[7]){mo=MON[m[7].slice(0,3).toLowerCase()];d=+m[8];y=m[9]?+m[9]:0}else{mo=+m[1];d=+m[2];y=m[3]?(+m[3]<100?2000+ +m[3]:+m[3]):0}
+  if(mo<1||mo>12||d<1||d>31)return null;if(!y)y=mo>endMo?endY-1:endY;return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`};
+ const credit=/minimum payment|payment due date|credit limit|new balance/i.test(fullText)&&!/checking|savings|share draft/i.test(fullText);
+ const out=[];let cols=null,last=null,lastBal=null,checked=0,agree=0,accounts=new Set();
+ for(const items of pages){
+  /* group text into lines */
+  const lines=[];items.filter(i=>i.s.trim()).sort((a,b)=>b.y-a.y||a.x-b.x).forEach(i=>{const L=lines.find(l=>Math.abs(l.y-i.y)<=2.5);if(L)L.items.push(i);else lines.push({y:i.y,items:[i]})});
+  lines.forEach(l=>l.items.sort((a,b)=>a.x-b.x));
+  for(const l of lines){const it=l.items,text=it.map(i=>i.s).join(' ').replace(/\s+/g,' ').trim();
+   /* column headings: remember where amount-type columns sit */
+   if(/\bdate\b/i.test(text)&&/amount|debit|credit|withdraw|deposit|balance|payment|charge/i.test(text)&&!it.some(i=>MONEY.test(i.s.trim()))){
+    cols=it.filter(i=>/amount|debit|credit|withdraw|deposit|balance|payment|charge|purchase/i.test(i.s)).map(i=>({r:i.x+i.w,c:i.x+i.w/2,k:/balance/i.test(i.s)?'bal':/debit|withdraw|charge|purchase|payments? and/i.test(i.s)?'out':/credit|deposit|addition/i.test(i.s)?'in':'amt'}));last=null;continue}
+   {const am=/^(.{3,60}?)\s+-\s+account\b/i.exec(text);if(am&&!it.some(i=>MONEY.test(i.s.trim())))accounts.add(text)}
+   /* split a date that shares its text item with the description */
+   let toks=[];for(const i of it){const s=i.s.trim(),m=/^(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\s+(.+)$/.exec(s);if(m&&!toks.length){toks.push({s:m[1],x:i.x,w:i.w*0.25},{s:m[2],x:i.x+i.w*0.3,w:i.w*0.7})}else toks.push({s,x:i.x,w:i.w})}
+   const dm=toks.length?DATE.exec(toks[0].s):null,amts=toks.filter(t=>MONEY.test(t.s)),words=toks.filter((t,k)=>!(k===0&&dm)&&!MONEY.test(t.s)&&!(k===1&&DATE.test(t.s))&&!/^(cr|dr)$/i.test(t.s));
+   const desc=words.map(t=>t.s).join(' ').replace(/\s+/g,' ').trim();
+   if(/^(beginning|opening|previous|starting) balance|balance forward/i.test(desc||text)&&amts.length){lastBal=moneyVal(amts[amts.length-1].s);last=null;continue}
+   if(dm&&amts.length&&/[a-z]{2}/i.test(desc)&&!/^(ending|closing|new) balance|^total|^subtotal/i.test(desc)){
+    const date=toDate(dm);if(!date){last=null;continue}
+    /* which number is the transaction and which is the running balance */
+    let bal=null,v=null;const near=t=>cols&&cols.length?cols.reduce((a,c)=>Math.abs(c.r-(t.x+t.w))<Math.abs(a.r-(t.x+t.w))?c:a):null;
+    const tagged=amts.map(t=>({t,val:moneyVal(t.s),col:near(t),cr:/\bcr\b/i.test(text.slice(text.indexOf(t.s)+t.s.length,text.indexOf(t.s)+t.s.length+4))}));
+    let balT=tagged.find(x=>x.col&&x.col.k==='bal');if(!balT&&tagged.length>=2&&!(cols&&cols.some(c=>c.k==='in'||c.k==='out')))balT=tagged[tagged.length-1];
+    if(balT)bal=balT.val;const rest=tagged.filter(x=>x!==balT);if(!rest.length){last=null;continue}
+    const a=rest[0];v=a.val;if(a.col&&a.col.k==='out')v=-Math.abs(v);else if(a.col&&a.col.k==='in')v=Math.abs(v);else if(a.cr)v=Math.abs(v);else if(credit)v=-v;
+    if(bal!=null&&lastBal!=null){checked++;if(Math.abs(lastBal+v-bal)<0.006)agree++;else if(Math.abs(lastBal-v-bal)<0.006){v=-v;agree++}}
+    if(bal!=null)lastBal=bal;
+    last={date,desc,v,x:words.length?words[0].x:0,y:l.y,more:0};out.push(last);continue}
+   /* a wrapped description line sits just under the previous transaction, lined up with its description */
+   if(last&&!dm&&!amts.length&&last.more<2&&Math.abs(l.y-last.y)<16&&toks.length&&toks[0].x>=last.x-4&&toks[0].x<=last.x+60){last.desc+=' '+text;last.more++;last.y=l.y;continue}
+   last=null}
+  last=null}
+ const rows=out.map(o=>[o.date,o.desc.replace(/\b\d{10,}\b/g,'').replace(/\s+/g,' ').trim(),o.v.toFixed(2)]);
+ const ds=out.map(o=>o.date).sort();
+ return {rows,checked,agree,from:ds[0],to:ds[ds.length-1],accounts:accounts.size,credit}}
+
+let pendingPDF=null;
+async function readPDF(buf,nm){await lib('pdf');const pj=window.pdfjsLib;pj.GlobalWorkerOptions.workerSrc=LIBS.pdfWorker;
+ const doc=await pj.getDocument({data:new Uint8Array(buf)}).promise;const pages=[];let full='';
+ for(let p=1;p<=doc.numPages;p++){const tc=await (await doc.getPage(p)).getTextContent();pages.push(tc.items.map(i=>({s:i.str,x:i.transform[4],y:i.transform[5],w:i.width})));full+=tc.items.map(i=>i.str).join(' ')+'\n'}
+ if(!full.replace(/\s/g,'').length)throw{msg:'That PDF is a scanned picture with no text inside, so it can’t be read. Download the statement from your bank’s website instead, or use its CSV or OFX/QFX export.'};
+ const r=pdfStatementRows(pages,full);if(!r.rows.length)throw{msg:'No transactions were found in that PDF. If it’s a bank statement, try its CSV or OFX/QFX download instead.'};
+ pendingPDF={nm,rows:[['date','description','amount'],...r.rows]};
+ const tin=r.rows.reduce((t,x)=>t+Math.max(0,+x[2]),0),tout=r.rows.reduce((t,x)=>t+Math.max(0,-x[2]),0);
+ const check=r.checked?(r.agree===r.checked?`<br>✓ Every line matches the statement’s running balance, so the amounts and signs are right.`:`<br><b>${r.checked-r.agree} of ${r.checked} lines don’t match the statement’s running balance</b>, so some amounts may be off. Look them over below.`):'<br>This statement has no running balance to check against, so look over the amounts below.';
+ uploadMsg=`<b>Found ${r.rows.length} transactions</b> in ${esc(nm)}, ${dayLabel(r.from)} to ${dayLabel(r.to)}${r.accounts>1?` across ${r.accounts} accounts`:''}: ${money2(tin)} in, ${money2(tout)} out.${r.credit?' This looks like a credit card statement, so charges count as spending.':''}${check}
+  <span style="display:block;max-height:190px;overflow:auto;margin:10px 0;background:#fff;border-radius:10px;padding:6px 10px;font-size:13px">${r.rows.map(x=>`<span style="display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:8px;padding:3px 0;border-bottom:1px solid #f1ecf6"><span>${dayLabel(x[0])}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x[1])}</span><b style="color:${+x[2]<0?'var(--ink)':'#2f9a62'}">${+x[2]<0?'−':'+'}${money2(+x[2])}</b></span>`).join('')}</span>
+  <span class="actions" style="display:flex;margin:0"><button class="btn sm" data-act="pdfImport">Import these</button><button class="btn sm ghost" data-act="pdfCancel">Cancel</button></span>`;
+ render()}
+function ofxRows(t){const ent=x=>x.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&apos;/g,"'").replace(/&quot;/g,'"');const rows=[['date','description','amount']];
+ for(const blk of t.split(/<STMTTRN>/i).slice(1)){const g=k=>{const m=new RegExp('<'+k+'>([^<\\r\\n]*)','i').exec(blk);return m?ent(m[1].trim()):''};const d=g('DTPOSTED'),amt=g('TRNAMT');if(!/^\d{8}/.test(d)||amt==='')continue;
+  rows.push([`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`,[g('NAME'),g('MEMO')].filter((x,i,a)=>x&&a.indexOf(x)===i).join(' ')||g('TRNTYPE')||'Transaction',amt.replace(',','.')])}
+ if(rows.length<2)throw{msg:'No transactions were found in that OFX/QFX file.'};return rows}
+/* a sheet → rows the importer understands: a table with a heading row, or (for hand-laid-out budgets) labels with amounts beside them */
+function takeHome(rows){for(let r=0;r<rows.length;r++)for(let c=0;c<rows[r].length;c++){if(!/take.?home|net pay|net income/i.test(rows[r][c]))continue;
+  if(isNum(rows[r][c+1]))return num(rows[r][c+1]);const cand=[];
+  for(let k=r+1;k<Math.min(rows.length,r+10);k++){const v=rows[k][c];if(!isNum(v))continue;cand.push({v:num(v),lab:rows[k].slice(0,c).filter(x=>/[a-z]/i.test(x)).join(' ')})}
+  if(!cand.length)continue;const f=re=>cand.find(x=>re.test(x.lab)),r2=v=>Math.round(v*100)/100;let x;
+  if(x=f(/month/i))return x.v;if(x=f(/total/i))return x.v;x=cand[0];
+  if(/bi-?weekly|every (two|2) weeks/i.test(x.lab))return r2(x.v*26/12);if(/semi-?monthly|twice a month/i.test(x.lab))return x.v*2;if(/week/i.test(x.lab))return r2(x.v*52/12);if(/year|annual/i.test(x.lab))return r2(x.v/12);return x.v}
+ return 0}
+function tableFromGrid(rows){
+ for(let i=0;i<Math.min(rows.length,15);i++){const h=rows[i].map(c=>String(c).toLowerCase().trim());
+  const tx=h.some(x=>/^(trans(action)?\.?\s*)?date|posted/.test(x))&&h.some(x=>/amount|debit|credit|withdraw|deposit/.test(x)),bud=h.some(x=>/^(name|item|category|expense|description|bill|payee)/.test(x))&&h.some(x=>/budget|planned|amount|spent|actual|limit/.test(x));
+  if(tx||bud)return rows.slice(i)}
+ const lab=x=>/[a-z]/i.test(x)&&!isNum(x),by={};rows.forEach((r,ri)=>r.forEach((c,ci)=>{if(lab(c)&&isNum(r[ci+1]))(by[ci]=by[ci]||[]).push(ri)}));
+ const col=Object.keys(by).sort((a,b)=>by[b].length-by[a].length||a-b)[0];if(col==null||by[col].length<3)return null;const ci=+col,out=[['name','budget']];
+ rows.forEach(r=>{if(lab(r[ci])&&isNum(r[ci+1]))out.push([String(r[ci]).trim(),String(r[ci+1]).replace(/[$,]/g,'')])});
+ const inc=takeHome(rows);if(inc)out.push(['Take-home pay',String(inc)]);return out}
+let lastWB=null;
+async function readXLSX(buf,nm){await lib('xlsx');const wb=XLSX.read(buf,{type:'array',cellDates:true});lastWB={wb,nm};
+ const yr=n=>{const m=/\b(19|20)\d{2}\b/.exec(n);return m?+m[0]:0},cy=new Date().getFullYear(),dated=wb.SheetNames.filter(n=>yr(n)&&yr(n)<=cy+1).sort((a,b)=>yr(b)-yr(a));
+ importSheet(dated[0]||wb.SheetNames[0])}
+function importSheet(name){const ws=lastWB.wb.Sheets[name],p2=v=>String(v).padStart(2,'0');
+ const cell=v=>v==null?'':v instanceof Date?`${v.getFullYear()}-${p2(v.getMonth()+1)}-${p2(v.getDate())}`:typeof v==='number'?String(Math.round(v*100)/100):String(v);
+ const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null,blankrows:false}).map(r=>(r||[]).map(cell)),t=tableFromGrid(rows);
+ if(!t)throw{msg:`Couldn’t find a budget or transactions on the “${esc(name)}” sheet.`+sheetPicker(name)};
+ importText(null,lastWB.nm,t);if(lastWB.wb.SheetNames.length>1){uploadMsg+=sheetPicker(name);render()}}
+const sheetPicker=cur=>lastWB&&lastWB.wb.SheetNames.length>1?`<label class="f" style="margin-top:10px">Sheet used from ${esc(lastWB.nm)}<select data-sheet="1">${lastWB.wb.SheetNames.map(n=>`<option ${n===cur?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`:'';
+async function readFile(file){const nm=file.name||'file';pendingPDF=null;uploadMsg=`Reading ${esc(nm)}…`;budgetTab='upload';render();
+ try{const buf=await file.arrayBuffer(),head=new TextDecoder().decode(buf.slice(0,5));
+  if(/\.pdf$/i.test(nm)||head.startsWith('%PDF'))return await readPDF(buf,nm);
+  if(/\.(xlsx|xlsm|xlsb|xls|ods|numbers)$/i.test(nm)||head.startsWith('PK'))return await readXLSX(buf,nm);
+  const text=new TextDecoder().decode(buf);
+  if(/\.(ofx|qfx|qbo)$/i.test(nm)||/OFXHEADER|<OFX>/i.test(text.slice(0,3000)))return importText(null,nm,ofxRows(text));
+  importText(text,nm)}
+ catch(err){uploadMsg=err&&err.msg?err.msg:'That file couldn’t be read. Check that it’s a bank statement or a budget with a name and an amount on each row.';budgetTab='upload';render()}}
 function parseDay(s){s=String(s||'').trim();let m=/^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);if(m)return{y:+m[1],mo:+m[2],d:+m[3]};m=/^(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](\d{2,4}))?$/.exec(s);if(m)return{y:m[3]?(+m[3]<100?2000+ +m[3]:+m[3]):2026,mo:+m[1],d:+m[2]};
  if(/[a-z]/i.test(s)&&/\d/.test(s)){const t=Date.parse(s);if(!isNaN(t)){const D=new Date(t);return{y:D.getFullYear(),mo:D.getMonth()+1,d:D.getDate()}}}return null}
 /* Transactions → categories. In order: (1) choices you saved, (2) a category column (a bank's category or a Plaid code), (3) a distinctive word
@@ -1097,14 +1202,14 @@ function importTx(rows,hasHead,h){const col=(re,d)=>hasHead?h.findIndex(x=>re.te
  if(uns){budgetTab='sort';render()}else{budgetTab='upload';render();setTimeout(()=>{if(view&&view.t==='budget'&&budgetTab==='upload')startAnim()},1500)}}
 function sanG(g){return{account:String(g.account||'').slice(0,40),name:String(g.name||'Goal').slice(0,40),goal:num(g.goal),start:num(g.start),target:num(g.target),a:Array.isArray(g.a)&&g.a.length===3?g.a.map(num):[0,0,0]}}
 let catMsg='';
-function importText(text,name){let n=0,extra='';catMsg='';
- if(/\.json$/i.test(name)||/^\s*[\[{]/.test(text)){const d=JSON.parse(text);const arr=Array.isArray(d)?d:d.bills;if(!Array.isArray(arr))throw 0;
+function importText(text,name,rowsIn){let n=0,extra='';catMsg='';
+ if(!rowsIn&&(/\.json$/i.test(name)||/^\s*[\[{]/.test(text))){const d=JSON.parse(text);const arr=Array.isArray(d)?d:d.bills;if(!Array.isArray(arr))throw 0;
   const bills=arr.map(x=>({id:uid(),name:String(x.name||'Bill').slice(0,60),cat:String(x.cat||x.category||''),budget:num(x.budget),
    a:Array.isArray(x.a)&&x.a.length===3?x.a.map(num):[0,0,0].map(()=>num(x.spent!=null?x.spent:x.budget)),due:String(x.due||'').slice(0,30),note:String(x.note||'').slice(0,200),spot:SPOTS[x.spot]?x.spot:null,
    lines:Array.isArray(x.lines)?x.lines.slice(0,40).map(l=>({name:String(l.name||'').slice(0,60),budget:num(l.budget)})):undefined}));
   if(!Array.isArray(d)){if(Array.isArray(d.income)&&d.income.length===3)S.income=d.income.map(num);if(d.tank)Object.assign(S.tank,sanG(d.tank));if(Array.isArray(d.goals)){S.goals=d.goals.slice(0,6).map(sanG);buildGarden()}}
   const st=migrate({bills,tx:{},rules:{}});S.bills=st.bills;S.bills.forEach(placeSet);n=S.bills.length}
- else{const rows=parseCSV(text);if(!rows.length)throw 0;const h=rows[0].map(s=>s.toLowerCase());const hasHead=h.some(s=>/name|item|category|budget|amount|spent|actual|date|desc/.test(s));
+ else{const rows=rowsIn||parseCSV(text);if(!rows.length)throw 0;const h=rows[0].map(s=>s.toLowerCase());const hasHead=h.some(s=>/name|item|category|budget|amount|spent|actual|date|desc/.test(s));
   if((hasHead&&h.some(s=>/date|posted/.test(s)))||(!hasHead&&parseDay(rows[0][0])))return importTx(rows,hasHead,h);
   const col=(re,d)=>hasHead?h.findIndex(s=>re.test(s)):d;
   const ci={name:col(/name|item|bill|expense|description|payee/,0),cat:col(/categ|group|type/,-1),budget:col(/budget|planned|amount|limit/,1),spent:col(/spent|actual|paid/,2)};if(ci.name<0)ci.name=0;
