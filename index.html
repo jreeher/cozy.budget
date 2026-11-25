@@ -40,6 +40,9 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 .btn.ghost{background:#f2edf8;color:var(--ink);box-shadow:none}
 .btn.danger{background:var(--coralbg);color:#b23642;box-shadow:none}
 .btn.sm{min-height:40px;padding:0 14px;font-size:15px}
+.mover{position:fixed;z-index:4;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(560px,calc(100% - 24px));background:#fffaf7f0;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:22px;box-shadow:0 14px 40px #5a3f8a33;padding:12px 14px;display:none;flex-direction:column;gap:10px;text-align:center;font-weight:500}
+.mover .mvb{display:flex;gap:8px;justify-content:center}.mover .btn:disabled{opacity:.45}
+body.moving .mover{display:flex}body.moving .bar{opacity:0;pointer-events:none}
 #menuBtn{position:relative;width:44px;padding:0;display:grid;place-items:center}
 #menuBtn .dot{position:absolute;top:6px;right:6px;width:10px;height:10px;border-radius:50%;background:var(--coral);box-shadow:0 0 0 2px #f2edf8;display:none}
 #menuBtn.due .dot{display:block}
@@ -151,6 +154,7 @@ body.playing .bar{opacity:0;pointer-events:none}body.playing .bar>*{pointer-even
  <div class="stats" id="stats"></div>
 </header>
 
+<div class="mover" id="mover" role="region" aria-label="Move object"><span id="mvTxt"></span><span class="mvb"><button class="btn sm ghost" id="mvRot">⟳ Turn</button><button class="btn sm ghost" id="mvCancel">Cancel</button><button class="btn sm" id="mvDone">Done</button></span></div>
 <div class="bar">
  <span class="hint" id="hint"></span>
  <button class="btn ghost" id="playBtn">▶ Play month</button>
@@ -319,6 +323,7 @@ function floor(w,d,x,z,c1,c2,cell=0.8){const m=c2?new THREE.MeshStandardMaterial
 function disc(p,r,c,x,y,z){const d=new THREE.Mesh(new THREE.CircleGeometry(r,40),M(c));d.rotation.x=-Math.PI/2;d.position.set(x,y,z);d.receiveShadow=true;p.add(d);return d}
 
 /* ---------- Diorama base ---------- */
+const WALLS=[[-16.75,-0.15,-13.48,-13.02],[-16.95,-16.5,-13.3,3.3]];
 box(world,16.8,0.25,11.1,'#c2e2aa',-8.95,0,8.85,0.05);
 box(world,17.4,0.25,28.8,'#b6dca1',8.15,0,0.2,0.05);
 box(world,16,0.3,16.3,'#ebbd95',-8.5,0,-4.9,0.05);
@@ -332,7 +337,7 @@ const bulbA=B('#fff2b3'),bulbB=B('#ffc7d8');
 for(let i=0;i<28;i++){const f=i/27;mesh(world,sph(0.1),i%2?bulbA:bulbB,-16.3+f*15.6,5.95-0.38*Math.abs(Math.sin(f*Math.PI*4)),-12.92).castShadow=false}
 for(let i=0;i<26;i++){const f=i/25;mesh(world,sph(0.1),i%2?bulbB:bulbA,-16.42,5.95-0.38*Math.abs(Math.sin(f*Math.PI*4)),-12.7+f*15.4).castShadow=false}
 const kwM=M('#fbe4df'),capM=M('#ffffff');
-function kw(x1,z1,x2,z2){const h=1.5,t=0.3;
+function kw(x1,z1,x2,z2){const h=1.5,t=0.3;WALLS.push(z1===z2?[x1,x2,z1-0.2,z1+0.2]:[x1-0.2,x1+0.2,z1,z2]);
  if(z1===z2){box(world,x2-x1,h,t,kwM,(x1+x2)/2,0.3,z1,0.08);box(world,x2-x1+0.04,0.08,t+0.08,capM,(x1+x2)/2,0.3+h,z1,0.03)}
  else{box(world,t,h,z2-z1,kwM,x1,0.3,(z1+z2)/2,0.08);box(world,t+0.08,0.08,z2-z1+0.04,capM,x1,0.3+h,(z1+z2)/2,0.03)}}
 [[-16.5,-14.2],[-12.4,-9.0],[-7.6,-3.0],[-1.8,-0.5]].forEach(([a,b])=>kw(a,-5,b,-5));
@@ -374,7 +379,8 @@ const coin={};for(const k in COINS)coin[k]=canvasTex(128,128,x=>coinDraw(x,...CO
 function reg(g,id,opt={}){
  world.updateMatrixWorld(true);
  const bb=new THREE.Box3().setFromObject(g),size=bb.getSize(new THREE.Vector3()),ctr=bb.getCenter(new THREE.Vector3());
- const h={id,g,kind:opt.kind||'spot',label:opt.label||id,suggest:opt.suggest||null,cat:opt.cat||null,room:opt.room||'',mats:[],base:g.scale.x,phase:rnd()*6,ctr,status:'none',pulse:0};
+ const h={id,g,kind:opt.kind||'spot',label:opt.label||id,suggest:opt.suggest||null,cat:opt.cat||null,room:opt.room||'',mats:[],base:g.scale.x,phase:rnd()*6,ctr,status:'none',pulse:0,wall:!!opt.wall};
+ h.bbr=[bb.min.x,bb.max.x,bb.min.z,bb.max.z];
  g.traverse(o=>{if(!o.isMesh)return;o.userData.hot=h;targets.push(o);if(o.material.emissive&&!o.userData.keep){o.material=o.material.clone();h.mats.push(o.material)}});
  if(h.kind==='spot'){
   if(!opt.wall){const r=Math.max(size.x,size.z)*0.6+0.3;
@@ -383,7 +389,13 @@ function reg(g,id,opt={}){
   const s=new THREE.Sprite(new THREE.SpriteMaterial({map:coin.ok.t,depthTest:false,transparent:true}));
   s.renderOrder=10;s.position.set(ctr.x+(opt.bx||0),bb.max.y+0.75,ctr.z+(opt.bz||0));s.visible=false;
   s.userData.hot=h;s.userData.y=s.position.y;world.add(s);h.badge=s;targets.push(s);SPOTS[id]=h}
+ if(h.kind==='spot'&&g.parent===world){const fl=floorAt(ctr.x,ctr.z);
+  h.orig={x:g.position.x,y:g.position.y,z:g.position.z,ry:g.rotation.y,fl,fp:[bb.min.x-g.position.x,bb.max.x-g.position.x,bb.min.z-g.position.z,bb.max.z-g.position.z],cy:ctr.y,rgy:h.ring?h.ring.position.y-fl:0.03,bdx:h.badge.position.x-ctr.x,bdz:h.badge.position.z-ctr.z};
+  h.fp=h.orig.fp.slice();h.movable=!h.wall&&bb.min.y<fl+0.6}
  hot.push(h);return h}
+/* where the floor is: the house sits a little higher than the lawn */
+const HOUSE=[-16.5,-0.5,-13.0,3.25],inR=(r,x,z)=>x>=r[0]&&x<=r[1]&&z>=r[2]&&z<=r[3];
+function floorAt(x,z){return inR(HOUSE,x,z)?0.3:0.25}
 const spot=(g,id,label,room,opt={})=>reg(g,id,Object.assign({label,room},opt));
 function hitBox(g,w,h,d,y=0){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),B('#000',{transparent:true,opacity:0,depthWrite:false}));m.position.y=y+h/2;m.userData.keep=true;g.add(m);return m}
 
@@ -630,7 +642,7 @@ function buildGarden(){const shared=new Set(Object.values(matCache)),sharedG=new
   mesh(hg,sph(0.3),'#93644a',0,0.02,0.1).scale.set(1.2,0.25,1.2);hitBox(hg,0.9,2.8,0.9);
   const h=reg(hg,'hoe',{kind:'hoe'});byId.hoe=h;
   const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:coin.idea.t,depthTest:false,transparent:true}));sp.renderOrder=10;sp.scale.set(0.9,0.9,1);sp.position.set(hx+0.35,3.4,hz);sp.userData.hot=h;sp.userData.y=3.4;gardenG.add(sp);h.badge=sp;targets.push(sp)}
- gardenTargets();snapGarden();S.goals.forEach((g,i)=>packetDraw(i,month))}
+ gardenTargets();snapGarden();S.goals.forEach((g,i)=>packetDraw(i,month));applyLayout()}
 /* tapping the Sample budget tag five times quickly loads the private budget */
 {let taps=[];document.getElementById('sampleTag').addEventListener('click',()=>{const now=Date.now();taps=taps.filter(t=>now-t<2500);taps.push(now);if(taps.length>=5){taps=[];loadSecret()}})}
 function loadSecret(){if(!SECRET)return;if(anim)stopAnim();S=migrate(clone(SECRET));if(!S.rules)S.rules={};edited=true;save(true);buildGarden();month=1;applyMonth(false);selected=null;flyTo(null);budgetTab='overview';open({t:'budget'})}
@@ -800,15 +812,99 @@ const flies=[];
 [['#f7a6bf',7,-4],['#ffd76e',12,2],['#d8c6f4',9,-8]].forEach(([c,x,z],i)=>{const g=grp(world,x,2.8,z);const wm=B(c,{side:THREE.DoubleSide});
  const w1=new THREE.Mesh(new THREE.PlaneGeometry(.34,.26),wm),w2=w1.clone();w1.position.x=.17;w2.position.x=-.17;const p1=grp(g,0,0,0),p2=grp(g,0,0,0);p1.add(w1);p2.add(w2);flies.push({g,p1,p2,x,z,ph:i*2.1})});
 
+/* ---------- Furniture: remove, add from a catalog, drag to move ---------- */
+const GROUND=[HOUSE,[-17.2,-0.5,3.25,14.3],[-0.5,16.7,-14.1,14.4]];
+function roomAt(x,z){if(!inR(HOUSE,x,z))return 'Yard';if(z<-5)return x<-10.5?'Kitchen':x<-5?'Bedroom':'Bathroom';return x<-8?'Living room':x<-3.5?'Kids’ room':'Laundry'}
+const rotFp=(f,k)=>{let r=f.slice();for(let i=0;i<((k%4)+4)%4;i++)r=[r[2],r[3],-r[1],-r[0]];return r};
+const ov=(a,b,p=0.04)=>a[0]<b[1]-p&&a[1]>b[0]+p&&a[2]<b[3]-p&&a[3]>b[2]+p;
+const rectOf=h=>h.orig&&h.fp?[h.g.position.x+h.fp[0],h.g.position.x+h.fp[1],h.g.position.z+h.fp[2],h.g.position.z+h.fp[3]]:h.bbr;
+/* the furniture catalog: each builds a small model in the house's style around (0,0,0) */
+const CATALOG={
+ desk:{name:'Desk',where:'in',build(g){box(g,2.2,0.12,1.1,'#e8c39e',0,1.36,0,0.04);[[-1,-0.45],[1,-0.45],[-1,0.45],[1,0.45]].forEach(([x,z])=>box(g,0.12,1.36,0.12,'#d9ab80',x,0,z,0.03));box(g,0.6,0.6,1.0,'#f3d7bd',0.7,0.75,0,0.05);
+  box(g,0.75,0.45,0.08,'#3d3a52',-0.3,1.5,-0.35,0.03);box(g,0.62,0.34,0.02,'#bfe4ff',-0.3,1.555,-0.3,0.01);box(g,0.85,0.1,0.85,'#b9a7ea',-0.2,0.85,0.95,0.05);box(g,0.85,0.9,0.1,'#b9a7ea',-0.2,0.95,1.35,0.05);[[-0.5,0.7],[0.1,0.7],[-0.5,1.2],[0.1,1.2]].forEach(([x,z])=>box(g,0.07,0.85,0.07,'#9b8ad1',x,0,z,0.02))}},
+ piano:{name:'Piano',where:'in',build(g){box(g,2.4,2.0,0.9,'#5b4a6e',0,0,0,0.08);box(g,2.3,0.12,0.45,'#5b4a6e',0,1.05,0.6,0.04);box(g,2.1,0.08,0.38,'#fffaf3',0,1.17,0.62,0.02);for(let i=0;i<14;i++)if(i%7!==2&&i%7!==6)box(g,0.07,0.06,0.22,'#3d3a52',-0.95+i*0.15+0.07,1.25,0.55,0.01);
+  box(g,1.4,0.1,0.55,'#5b4a6e',0,0.75,1.35,0.04);[[-0.6,1.15],[0.6,1.15],[-0.6,1.55],[0.6,1.55]].forEach(([x,z])=>box(g,0.08,0.75,0.08,'#4b3c5d',x,0,z,0.02));box(g,0.3,0.4,0.04,'#fffaf3',0.5,2.0,-0.1,0.01)}},
+ aquarium:{name:'Aquarium',where:'in',build(g){box(g,2.0,1.1,0.9,'#a6cff2',0,0,0,0.06);box(g,1.9,1.1,0.8,M('#bfe9ff',{transparent:true,opacity:.55}),0,1.1,0,0.03);box(g,1.85,0.18,0.75,'#f6e3b0',0,1.12,0,0.02);
+  [[-0.5,'#ff9f6e',0.05],[0.3,'#ffd76e',-0.15],[0.1,'#f59ab5',0.2]].forEach(([x,c,z],i)=>{const f=mesh(g,sph(0.12),c,x,1.6+i*0.15,z);f.scale.set(1.5,1,0.6)});[[-0.7,0.6],[0.65,0.75]].forEach(([x,hh])=>mesh(g,cyl(0.05,0.07,hh,6),'#7cc47f',x,1.3+hh/2,0.1));box(g,2.0,0.08,0.9,'#7fb3dd',0,2.2,0,0.03)}},
+ treadmill:{name:'Treadmill',where:'any',build(g){box(g,1.1,0.3,2.4,'#8a90a6',0,0,0,0.08);box(g,0.85,0.06,2.0,'#3d3a52',0,0.3,0.05,0.02);[-0.5,0.5].forEach(x=>{const p=mesh(g,cyl(0.05,0.05,1.6,8),'#aab0c4',x,1.1,-1.0);p.rotation.x=0.15});box(g,1.2,0.45,0.25,'#d8c6f4',0,1.75,-1.15,0.06);box(g,0.5,0.25,0.04,'#bfe4ff',0,1.85,-1.02,0.02)}},
+ armchair:{name:'Armchair',where:'in',build(g){box(g,1.6,0.55,1.4,'#b4e09f',0,0,0,0.18);box(g,1.6,1.15,0.35,'#a2d58a',0,0.3,-0.55,0.15);[-0.68,0.68].forEach(x=>box(g,0.3,0.85,1.4,'#a2d58a',x,0.2,0,0.12));box(g,1.0,0.22,1.0,'#c8edb6',0,0.55,0.1,0.1);box(g,0.55,0.45,0.15,'#ffd978',0.1,0.75,-0.3,0.08)}},
+ fig:{name:'Fiddle-leaf fig',where:'any',build(g){mesh(g,cyl(0.42,0.32,0.75,14),'#f6c4a0',0,0.375,0);mesh(g,cyl(0.06,0.08,1.6,8),'#a9785a',0,1.4,0);
+  [[0,2.5,0,0.5],[0.35,2.1,0.1,0.42],[-0.35,2.0,-0.05,0.42],[0.15,1.7,-0.3,0.38],[-0.2,2.8,0.2,0.36],[0.3,2.6,-0.2,0.34]].forEach(([x,y,z,r])=>{const l=mesh(g,sph(r),'#5f9f7a',x,y,z);l.scale.set(1,0.75,0.6);l.rotation.y=x*2})}},
+ guitar:{name:'Guitar',where:'in',build(g){const t=grp(g,0,0.05,0);t.rotation.x=-0.25;const b1=mesh(t,sph(0.42),'#e8a06e',0,0.55,0);b1.scale.set(1,1.05,0.35);const b2=mesh(t,sph(0.32),'#e8a06e',0,1.05,0);b2.scale.set(1,1,0.35);mesh(t,cyl(0.12,0.12,0.05,12),'#3d3a52',0,0.8,0.14).rotation.x=Math.PI/2;
+  box(t,0.12,1.1,0.08,'#8a5a3c',0,1.3,0,0.02);box(t,0.18,0.25,0.08,'#6e4630',0,2.35,0,0.02);[-0.25,0.25].forEach(x=>box(g,0.06,0.5,0.06,'#3d3a52',x,0,0.25,0.02));box(g,0.6,0.06,0.2,'#3d3a52',0,0.1,0.25,0.02)}},
+ easel:{name:'Art easel',where:'any',build(g){[[-0.45,0.2,0.2],[0.45,0.2,-0.2]].forEach(([x,z,r])=>{const l=mesh(g,cyl(0.04,0.05,2.6,6),'#d9ab80',x,1.3,z);l.rotation.z=r;l.rotation.x=-0.12});const b=mesh(g,cyl(0.04,0.05,2.6,6),'#d9ab80',0,1.2,-0.45);b.rotation.x=0.35;
+  box(g,1.3,1.0,0.06,'#fffaf3',0,1.25,0.25,0.02);[[-0.3,1.6,'#f59ab5',0.35],[0.25,1.45,'#a6cff2',0.4],[0,1.75,'#ffd76e',0.3],[0.15,1.95,'#b4e09f',0.25]].forEach(([x,y,c,w])=>box(g,w,0.22,0.02,c,x,y,0.3,0.01));box(g,1.1,0.06,0.25,'#d9ab80',0,1.2,0.3,0.02)}},
+ workbench:{name:'Workbench',where:'any',build(g){box(g,2.4,0.15,1.0,'#d9ab80',0,1.2,0,0.04);[[-1.1,-0.4],[1.1,-0.4],[-1.1,0.4],[1.1,0.4]].forEach(([x,z])=>box(g,0.14,1.2,0.14,'#b98a62',x,0,z,0.03));box(g,2.2,0.08,0.8,'#c99c76',0,0.35,0,0.02);
+  box(g,2.4,1.4,0.08,'#f3d7bd',0,1.35,-0.48,0.03);box(g,0.12,0.6,0.06,'#e8606c',-0.7,1.8,-0.4,0.02);box(g,0.35,0.12,0.06,'#8a90a6',-0.7,2.15,-0.4,0.02);box(g,0.5,0.1,0.06,'#8a90a6',0.2,2.0,-0.4,0.02);box(g,0.1,0.5,0.06,'#ffd76e',0.7,1.7,-0.4,0.02);box(g,0.5,0.3,0.35,'#e8606c',0.6,1.35,0.1,0.05)}},
+ bench:{name:'Garden bench',where:'out',build(g){[0,0.32,0.64].forEach(dz=>box(g,2.4,0.08,0.26,'#d9ab80',0,0.75,-0.3+dz,0.03));[0,0.3].forEach(dy=>box(g,2.4,0.24,0.08,'#d9ab80',0,1.05+dy,-0.42,0.03));
+  [-1.1,1.1].forEach(x=>{box(g,0.12,0.8,0.12,'#a9785a',x,0,0.3,0.03);box(g,0.12,1.5,0.12,'#a9785a',x,0,-0.42,0.03);box(g,0.12,0.08,0.8,'#a9785a',x,1.05,-0.05,0.03)})}},
+ coop:{name:'Chicken coop',where:'out',build(g){[[-0.85,-0.65],[0.85,-0.65],[-0.85,0.65],[0.85,0.65]].forEach(([x,z])=>box(g,0.14,0.8,0.14,'#a9785a',x,0,z,0.03));box(g,2.0,1.2,1.6,'#f6c4a0',0,0.8,0,0.06);
+  const roof=mesh(g,new THREE.ConeGeometry(1.6,0.9,4),'#e8606c',0,2.45,0);roof.rotation.y=Math.PI/4;roof.scale.set(0.95,1,0.8);box(g,0.45,0.55,0.05,'#5b4a6e',0.4,0.9,0.81,0.03);const ramp=box(g,0.4,0.05,1.1,'#d9ab80',0.4,0.35,1.2,0.02);ramp.rotation.x=0.65;
+  [[-0.7,1.6],[0.9,1.9]].forEach(([x,z])=>{mesh(g,sph(0.2),'#fffaf3',x,0.25,z);mesh(g,sph(0.11),'#fffaf3',x+0.15,0.45,z);mesh(g,sph(0.05),'#e8606c',x+0.17,0.57,z)})}},
+ kayak:{name:'Kayak',where:'out',build(g){[-0.9,0.9].forEach(z=>{box(g,0.12,0.9,0.12,'#a9785a',-0.45,0,z,0.03);box(g,0.12,0.9,0.12,'#a9785a',0.45,0,z,0.03);box(g,1.1,0.12,0.18,'#b98a62',0,0.85,z,0.03)});
+  const k=mesh(g,sph(0.5),'#ffb36b',0,1.25,0);k.scale.set(0.9,0.55,4.2);mesh(g,cyl(0.28,0.28,0.08,14),'#3d3a52',0,1.5,0.1);const p=box(g,0.08,0.06,2.6,'#5b4a6e',0.45,1.45,0,0.02);p.rotation.y=0.2}},
+ trampoline:{name:'Trampoline',where:'out',build(g){for(let i=0;i<6;i++){const a=i/6*Math.PI*2;box(g,0.1,0.9,0.1,'#8a90a6',Math.cos(a)*1.55,0,Math.sin(a)*1.55,0.03)}const r=mesh(g,new THREE.TorusGeometry(1.6,0.12,6,24),'#a6cff2',0,0.95,0);r.rotation.x=Math.PI/2;
+  mesh(g,cyl(1.5,1.5,0.04,24),'#3d3a52',0,0.93,0)}},
+ hottub:{name:'Hot tub',where:'out',build(g){box(g,2.6,1.0,2.6,'#c99c76',0,0,0,0.25);box(g,2.2,0.08,2.2,'#7fd0e8',0,0.9,0,0.15);box(g,0.6,0.3,0.6,'#d9ab80',1.0,0,1.6,0.05);[[0.5,0.3],[-0.4,-0.5],[0.1,-0.1]].forEach(([x,z])=>mesh(g,sph(0.06),'#ffffff',x,1.02,z))}}};
+let addedSeq=0;
+function setPose(h,x,z,k){const o=h.orig,fl=floorAt(x+(o.fp[0]+o.fp[1])/2,z+(o.fp[2]+o.fp[3])/2);h.g.position.set(x,o.y-o.fl+fl,z);h.g.rotation.y=o.ry+k*Math.PI/2;h.k=k;h.fp=rotFp(o.fp,k);
+ const cx=x+(h.fp[0]+h.fp[1])/2,cz=z+(h.fp[2]+h.fp[3])/2;h.ctr.set(cx,o.cy,cz);if(h.badge){h.badge.position.x=cx+o.bdx;h.badge.position.z=cz+o.bdz}if(h.ring){h.ring.position.set(cx,fl+o.rgy,cz)}
+ if(h.added||x!==o.x||z!==o.z)h.room=roomAt(cx,cz);else h.room=h.room0||h.room}
+function hideObj(h,on){h.hidden=on;h.g.visible=!on;if(h.ring&&on)h.ring.visible=false;if(h.badge&&on)h.badge.visible=false;if(on)S.bills.forEach(b=>{if(b.spot===h.id)b.spot=null})}
+function addObj(a){const C=CATALOG[a.type];if(!C)return null;const fl=floorAt(a.x,a.z),g=grp(world,a.x,fl,a.z);C.build(g);
+ const h=reg(g,a.id,{label:C.name,room:roomAt(a.x,a.z),suggest:C.name});h.added=true;h.type=a.type;byId[a.id]=h;h.room0=h.room;setPose(h,a.x,a.z,a.k||0);return h}
+function dropObj(h){world.remove(h.g);if(h.ring){world.remove(h.ring);h.ring.geometry.dispose();h.ring.material.dispose()}if(h.badge){world.remove(h.badge);h.badge.material.dispose()}h.mats.forEach(m=>m.dispose());
+ for(let i=targets.length-1;i>=0;i--)if(targets[i].userData.hot===h)targets.splice(i,1);const i=hot.indexOf(h);if(i>=0)hot.splice(i,1);delete SPOTS[h.id];delete byId[h.id];S.bills.forEach(b=>{if(b.spot===h.id)b.spot=null})}
+let layoutOn=false;
+function applyLayout(){if(!layoutOn)return;if(mv)endMove(false);
+ hot.filter(h=>h.added).forEach(dropObj);
+ for(const h of hot)if(h.orig){h.room=h.room0||(h.room0=h.room);setPose(h,h.orig.x,h.orig.z,0);if(h.hidden)hideObj(h,false)}
+ const L=S.layout||{};for(const id in L.moved||{}){const h=SPOTS[id],m=L.moved[id];if(h&&h.orig&&h.movable)setPose(h,m.x,m.z,m.k||0)}
+ for(const a of L.added||[])addObj(a);for(const id of L.hidden||[])if(SPOTS[id])hideObj(SPOTS[id],true)}
+const layout=()=>S.layout||(S.layout={hidden:[],moved:{},added:[]});
+/* move mode: the object follows your finger, its footprint shows green where it fits and red where it doesn't */
+let mv=null;const fpMesh=new THREE.Mesh(new THREE.PlaneGeometry(1,1),B('#5fc58b',{transparent:true,opacity:.62,depthWrite:false}));fpMesh.rotation.x=-Math.PI/2;fpMesh.visible=false;fpMesh.renderOrder=5;world.add(fpMesh);
+function fits(h){const r=rectOf(h),pts=[[r[0],r[2]],[r[1],r[2]],[r[0],r[3]],[r[1],r[3]],[(r[0]+r[1])/2,(r[2]+r[3])/2]];
+ if(!pts.every(([x,z])=>GROUND.some(G=>inR(G,x,z))))return false;if(WALLS.some(w=>ov(r,w)))return false;
+ for(const o of hot){if(o===h||o.hidden||o.kind==='secret')continue;const q=rectOf(o);if(q&&ov(r,q,0.06))return false}
+ for(const row of rows){const hw=S.goals.length<=4?1.0:0.75;if(ov(r,[row.x-hw,row.x+hw,-11.1,10.6]))return false}return true}
+function showFp(){const h=mv.h,r=rectOf(h);fpMesh.scale.set(r[1]-r[0]+0.2,r[3]-r[2]+0.2,1);fpMesh.position.set((r[0]+r[1])/2,floorAt((r[0]+r[1])/2,(r[2]+r[3])/2)+0.04,(r[2]+r[3])/2);
+ mv.ok=fits(h);fpMesh.material.color.set(mv.ok?'#5fc58b':'#f0707a');fpMesh.visible=true;
+ document.getElementById('mvTxt').textContent=mv.ok?`Drag the ${h.label.toLowerCase()} or tap where it should go`:'It doesn’t fit here: it overlaps something';document.getElementById('mvDone').disabled=!mv.ok}
+function startMove(h,isNew){if(!h||!h.orig||!h.movable)return;if(anim)stopAnim();close();mv={h,isNew,x0:h.g.position.x,z0:h.g.position.z,k0:h.k||0,drag:null};
+ document.body.classList.add('moving');showFp();selected=h;focusGoal.copy(world.localToWorld(tmp.copy(h.ctr)));zoomGoal=Math.max(zoomGoal,baseZoom*1.5)}
+function endMove(keep){if(!mv)return;const h=mv.h;
+ if(keep&&mv.ok){const x=h.g.position.x,z=h.g.position.z,k=h.k||0,L=layout();
+  if(h.added){const a=L.added.find(a=>a.id===h.id);if(a){a.x=x;a.z=z;a.k=k}}
+  else if(x===h.orig.x&&z===h.orig.z&&!k)delete L.moved[h.id];else L.moved[h.id]={x,z,k};save(true)}
+ else if(mv.isNew){const L=layout();L.added=L.added.filter(a=>a.id!==h.id);dropObj(h);save(true)}
+ else setPose(h,mv.x0,mv.z0,mv.k0);
+ mv=null;fpMesh.visible=false;document.body.classList.remove('moving');selected=null;applyMonth(false)}
+const gplane=new THREE.Plane(new THREE.Vector3(0,1,0),-0.3),gp=new THREE.Vector3();
+function groundAt(e){const r=canvas.getBoundingClientRect();ndc.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height)*2+1);ray.setFromCamera(ndc,cam);if(!ray.ray.intersectPlane(gplane,gp))return null;return world.worldToLocal(gp.clone())}
+const snap=v=>Math.round(v*4)/4;
+function moveTo(x,z){const h=mv.h,L=GROUND.reduce((a,G)=>[Math.min(a[0],G[0]),Math.max(a[1],G[1]),Math.min(a[2],G[2]),Math.max(a[3],G[3])],[99,-99,99,-99]);
+ setPose(h,snap(clamp(x,L[0]-h.fp[0],L[1]-h.fp[1])),snap(clamp(z,L[2]-h.fp[2],L[3]-h.fp[3])),h.k||0);showFp()}
+/* a free place for a new object, starting near the middle of the view */
+function freePlace(h,pref){const fx=pref?pref[0]:-9,fz=pref?pref[1]:-1;for(let r=0;r<26;r+=0.5)for(let a=0;a<Math.max(1,r*6);a++){const t=a/Math.max(1,r*6)*Math.PI*2,x=snap(fx+Math.cos(t)*r),z=snap(fz+Math.sin(t)*r);
+  setPose(h,x-(h.fp[0]+h.fp[1])/2,z-(h.fp[2]+h.fp[3])/2,0);if(fits(h))return true}return false}
+function addFromCatalog(type){const C=CATALOG[type],L=layout();if(!C)return;if(L.added.length>=20){menuMsg='<span class="warnline">The house holds up to 20 added objects. Remove one to add another.</span>';return render()}
+ const pref=C.where==='out'?[-9,9]:C.where==='in'?[-12,-1]:[-9,3],a={id:'add_'+Date.now().toString(36)+(addedSeq++),type,x:pref[0],z:pref[1],k:0},h=addObj(a);
+ if(!freePlace(h,pref)){dropObj(h);menuMsg='<span class="warnline">There’s no open space left for that. Move or remove something first.</span>';return render()}
+ a.x=h.g.position.x;a.z=h.g.position.z;L.added.push(a);startMove(h,true)}
+function vCatalog(){const L=layout();return `${head('Add an object')}<h2>Furniture catalog</h2><p class="sub">Pick something and it appears in the house. Drag it where you want it, then give it a category. ${L.added.length}/20 added.</p>
+ ${[['Inside','in'],['Inside or out','any'],['Yard','out']].map(([t,w])=>`<h3>${t}</h3><div class="grid2">${Object.entries(CATALOG).filter(([k,c])=>c.where===w).map(([k,c])=>`<button class="btn sm ghost" style="justify-content:flex-start" data-act="addObj" data-type="${k}">+ ${esc(c.name)}</button>`).join('')}</div>`).join('')}`}
+const objActions=h=>h&&h.orig?`<div class="actions">${h.movable?`<button class="btn sm ghost" data-act="moveObj" data-spot="${h.id}">Move ${h.added||!h.wall?'or turn':''} it</button>`:''}<button class="btn sm ghost" data-act="hideObj" data-spot="${h.id}">${h.added?(rmArm===h.id?'Tap again to remove':'Remove from house'):'Remove from house'}</button></div>${h.movable?'':'<p class="sub">This one sits on a wall or counter, so it stays put, but you can remove it.</p>'}`:'';
+let rmArm=null;
 /* ---------- State → scene ---------- */
-const byId={};hot.forEach(h=>byId[h.id]=h);
+const byId={};hot.forEach(h=>byId[h.id]=h);hot.forEach(h=>{h.room0=h.room});layoutOn=true;
 SET.forEach(c=>{const h=SPOTS[c.spot];if(h){h.home=c.id;if(h.suggest)h.suggest=c.name}});
 buildGarden();
 const billAt=sid=>S.bills.find(b=>b.spot===sid);
 const billById=id=>S.bills.find(b=>b.id===id);
 const isOver=b=>b.a[month]>b.budget;
 function applyMonth(rerender=true){let overN=0;
- for(const id in SPOTS){const h=SPOTS[id],b=billAt(id);h.status=b?(isOver(b)?'over':'ok'):(h.suggest?'idea':'none');if(h.status==='over')overN++;
+ for(const id in SPOTS){const h=SPOTS[id],b=billAt(id);h.status=h.hidden?'none':b?(isOver(b)?'over':'ok'):(h.suggest?'idea':'none');if(h.status==='over')overN++;
   h.badge.visible=h.status!=='none';if(h.badge.visible){h.badge.material.map=coin[h.status].t;h.badge.material.needsUpdate=true}}
  S.goals.forEach((gl,i)=>packetDraw(i,month));gardenTargets();
  plaqueDraw(month);if(!anim){restPile();if(activeRow()!==gardener.row)sendGardener()}
@@ -827,9 +923,9 @@ mEl.addEventListener('click',e=>{const b=e.target.closest('button');if(b){if(ani
 /* ---------- Sheet views ---------- */
 const sheet=document.getElementById('sheet');let view=null,selected=null,budgetTab='overview',uploadMsg='';
 const PAL=['#b9a7ea','#f7a6bf','#a6cff2','#ffd76e','#f6b48f','#bfe4d6','#d8c6f4','#ffc8a2','#9fd8c0','#f59ab5','#c3d7f5','#e7c6a2','#cde7a6','#f3b6e0','#a9c6e8','#f2d49b'];
-const spotOpts=sel=>Object.values(SPOTS).map(h=>{const b=billAt(h.id);return `<option value="${h.id}" ${h.id===sel?'selected':''}>${esc(h.room)} · ${esc(h.label)}${b&&h.id!==sel?' (has '+esc(b.name)+')':''}</option>`}).join('');
+const spotOpts=sel=>Object.values(SPOTS).filter(h=>!h.hidden||h.id===sel).map(h=>{const b=billAt(h.id);return `<option value="${h.id}" ${h.id===sel?'selected':''}>${esc(h.room)} · ${esc(h.label)}${b&&h.id!==sel?' (has '+esc(b.name)+')':''}</option>`}).join('');
 const catOpts=sel=>`<optgroup label="Set categories">${SET.map(c=>{const o=billOfCat(c.id);return `<option value="${c.id}" ${c.id===sel?'selected':''}>${esc(c.name)}${o&&c.id!==sel?' (combine with '+esc(o.name)+')':''}</option>`}).join('')}</optgroup><option value="custom" ${sel==='custom'?'selected':''}>Custom category</option>`;
-const freeOpts=sel=>Object.values(SPOTS).filter(h=>h.id===sel||!billAt(h.id)).map(h=>`<option value="${h.id}" ${h.id===sel?'selected':''}>${esc(h.room)} · ${esc(h.label)}${h.home&&!billOfCat(h.home)?'':''}</option>`).join('');
+const freeOpts=sel=>Object.values(SPOTS).filter(h=>h.id===sel||(!billAt(h.id)&&!h.hidden)).map(h=>`<option value="${h.id}" ${h.id===sel?'selected':''}>${esc(h.room)} · ${esc(h.label)}${h.home&&!billOfCat(h.home)?'':''}</option>`).join('');
 function homelessHTML(){const hl=S.bills.filter(b=>!b.spot||!SPOTS[b.spot]);return hl.length?`<div class="note" style="background:#f3eefc"><b>${hl.length} categor${hl.length===1?'y needs':'ies need'} a spot in the house.</b> Tap ${hl.length===1?'it':'one'} to choose an empty object: ${hl.map(b=>`<button class="btn sm ghost" style="min-height:36px;margin:6px 6px 0 0;background:#fff" data-pick="${b.id}">${esc(b.name)}</button>`).join('')}</div>`:''}
 const linesHTML=b=>(b.lines&&(b.lines.length>1||b.lines[0].name!==b.name)?`<p class="sub" style="margin-top:8px;grid-column:1 / -1">From your budget: ${b.lines.map(l=>`${esc(l.name)} ${fmt(l.budget)}`).join(' · ')}</p>`:'')+
  (coversOf(b).length?`<p class="sub" style="margin-top:8px;grid-column:1 / -1">Collects purchases of ${coversOf(b).filter(id=>!billOfCat(id)).map(id=>esc(SETBY[id].name)).join(' and ')||'nothing yet (those categories have their own spots)'}.</p>`:'');
@@ -846,7 +942,7 @@ function vBill(b){const v=b.a[month],d=v-b.budget,over=d>0,h=SPOTS[b.spot],cu=b.
   <div class="grid2" style="margin-top:10px"><label class="f">Monthly budget<input type="number" inputmode="decimal" id="e-budget" value="${b.budget}"></label><label class="f">Spent in ${MONTHS[month]}<input type="number" inputmode="decimal" id="e-spent" value="${v}"></label></div>
   <div class="grid2" style="margin-top:10px"><label class="f">Category<select id="e-cat">${catOpts(b.cat)}</select></label><label class="f">Lives in<select id="e-spot"><option value="">Not in the house</option>${spotOpts(b.spot)}</select></label></div>
   <div class="actions"><button class="btn sm" data-act="saveBill" data-id="${b.id}">Save</button><button class="btn sm danger" data-act="delBill" data-id="${b.id}">Delete category</button></div>
- </details>`}
+ </details>${h?`<details class="edit"><summary>Move or remove the ${esc(h.label.toLowerCase())}</summary>${objActions(h)}<p class="sub">Removing it sends ${esc(b.name)} to the “needs a spot” list.</p></details>`:''}`}
 function vSpot(h){const home=h.home&&SETBY[h.home],homeFree=home&&!billOfCat(home.id),movable=S.bills.filter(b=>b.spot!==h.id).sort((a,b)=>(a.spot?1:0)-(b.spot?1:0));
  return `${head(esc(h.room))}<h2>${esc(h.label)}</h2><p class="where">${home?(homeFree?`This is the home of the set category <b>${esc(home.name)}</b>, which isn’t in your budget yet.`:`${esc(home.name)} lives somewhere else, so this spot is free.`):'A free spot for a custom category.'}</p>
  ${homeFree?`<h3>Add ${esc(home.name)}</h3><div class="grid2"><label class="f">Monthly budget<input type="number" inputmode="decimal" id="h-budget" placeholder="0"></label><div class="actions" style="margin:0;align-self:end"><button class="btn sm" data-act="addSetHere" data-spot="${h.id}" data-cat="${home.id}">Add ${esc(home.name)}</button></div></div>`:''}
@@ -854,6 +950,7 @@ function vSpot(h){const home=h.home&&SETBY[h.home],homeFree=home&&!billOfCat(hom
  <label class="f">Name<input type="text" id="n-name" placeholder="e.g. Babysitting, Hosting, Music lessons"></label>
  <div class="grid2" style="margin-top:10px"><label class="f">Monthly budget<input type="number" inputmode="decimal" id="n-budget" placeholder="0"></label><label class="f">Spent in ${MONTHS[month]}<input type="number" inputmode="decimal" id="n-spent" placeholder="Same as budget"></label></div>
  <div class="actions"><button class="btn sm" data-act="addHere" data-spot="${h.id}">Add custom category</button></div>
+ <h3>This object</h3>${objActions(h)}
  ${movable.length?`<h3>Or move a category here</h3><div class="grid2"><select id="m-bill" aria-label="Category to move">${movable.map(b=>`<option value="${b.id}">${esc(b.name)}${b.spot&&SPOTS[b.spot]?' (in '+esc(SPOTS[b.spot].label)+')':' (needs a spot)'}</option>`).join('')}</select><button class="btn sm ghost" data-act="moveHere" data-spot="${h.id}">Move here</button></div>`:''}`}
 const goalOf=id=>id==='tank'?S.tank:S.goals[+String(id).slice(4)];
 function vGoal(h){const tank=h.kind==='tank',g=tank?S.tank:S.goals[h.gi],bal=balance(g,month),noTx=!(Array.isArray(S.tx[month])&&S.tx[month].length),gid=tank?'tank':'goal'+h.gi;
@@ -934,6 +1031,9 @@ function vMenu(){const un=unsortedOf(month).length,iOS=/iphone|ipad|ipod/i.test(
   :`<p class="sub">Bring back a budget from a backup file, on this phone or a new one.</p><label class="drop" style="margin-top:10px"><b style="color:var(--ink)">Choose a backup file</b><span>cozy-budget-backup-….json</span><input type="file" id="rs-file" accept=".json,application/json" style="position:absolute;opacity:0;width:1px;height:1px"></label>`}</div>
  <div class="card"><h3>Budget and statements</h3><p class="sub">Upload a budget or a bank statement (CSV, Excel, PDF, OFX/QFX), edit your categories, or sort purchases that didn’t match.</p>
   <div class="actions"><button class="btn sm" data-act="goBudget" data-to="upload">Upload</button><button class="btn sm ghost" data-act="goBudget" data-to="edit">Edit budget</button>${un?`<button class="btn sm ghost" data-act="goBudget" data-to="sort">Sort ${un}</button>`:''}</div></div>
+ <div class="card"><h3>Objects in your house</h3><p class="sub">Add furniture from the catalog, drag things around, or remove what you don’t need. To move or remove something, tap it in the house.</p>
+  <div class="actions"><button class="btn sm" data-act="catalog">Add an object</button>${(layout().hidden.length||Object.keys(layout().moved).length||layout().added.length)?`<button class="btn sm ghost" data-act="layoutReset">${rmArm==='__all'?'Tap again to put everything back':'Put everything back'}</button>`:''}</div>
+  ${layout().hidden.length?`<p class="sub" style="margin-top:10px">Removed: ${layout().hidden.map(id=>SPOTS[id]?`<button class="btn sm ghost" style="min-height:34px;margin:4px 6px 0 0;background:#fff" data-act="unhide" data-spot="${id}">↩ ${esc(SPOTS[id].label)}</button>`:'').join('')}</p>`:''}</div>
  <div class="card"><h3>Put it on your home screen</h3><p class="sub">${standalone()?'<span class="okline">✓ You’re using the home-screen app.</span>':installEvt?'Install it like an app. It opens full screen and keeps your data safer from automatic cleanup.':iOS?'In Safari, tap the Share button, then <b>Add to Home Screen</b>. It opens full screen, and Safari won’t clear its data on its own.':'In your browser’s menu, choose <b>Install app</b> or <b>Add to Home screen</b>. It opens full screen and keeps your data safer from automatic cleanup.'}</p>${installEvt&&!standalone()?'<div class="actions"><button class="btn sm" data-act="install">Install</button></div>':''}</div>
  <div class="card"><h3>Start over</h3><p class="sub">Erase everything on this device and go back to the sample budget.${edited&&backupDue()?' <span class="warnline">Back up first: you don’t have a recent backup.</span>':''}</p>
   <div class="actions"><button class="btn sm danger" data-act="menuReset">${resetArm?'Tap again to erase everything':'Reset to sample budget'}</button></div></div>`}
@@ -1016,7 +1116,8 @@ function render(){if(!view)return;let html='';
  else if(view.t==='budget')html=vBudget();
  else if(view.t==='pile')html=vPile();
  else if(view.t==='menu')html=vMenu();
- const st=sheet.scrollTop;sheet.innerHTML=html;sheet.classList.toggle('wide',view.t==='budget'||view.t==='menu');if(view.keep)sheet.scrollTop=st;else sheet.scrollTop=0;view.keep=false;
+ else if(view.t==='catalog')html=vCatalog();
+ const st=sheet.scrollTop;sheet.innerHTML=html;sheet.classList.toggle('wide',view.t==='budget'||view.t==='menu'||view.t==='catalog');if(view.keep)sheet.scrollTop=st;else sheet.scrollTop=0;view.keep=false;
  sheet.classList.add('open');document.body.classList.add('sheet-open');
  const rf=document.getElementById('rs-file');if(rf)rf.addEventListener('change',()=>{const file=rf.files[0];if(file)file.text().then(txt=>pickBackup(txt,file.name)).catch(()=>{menuMsg='<span class="warnline">That file couldn’t be read.</span>';render()})});
  const f=document.getElementById('file');if(f){f.addEventListener('change',()=>f.files[0]&&readFile(f.files[0]));const d=document.getElementById('drop');
@@ -1039,6 +1140,14 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
  if(a==='newBillFor'){const key=t.dataset.key,nm=(v('nb-name').value||'').trim().slice(0,60)||prettyKey(key),sp=v('nb-spot').value;
   const b={id:uid(),name:nm,cat:'custom',budget:num(v('nb-budget').value),a:[0,0,0],due:'',note:'',spot:null};S.bills.push(b);if(sp&&SPOTS[sp]&&!billAt(sp))b.spot=sp;
   sortNew=null;return sortAssign(key,'b:'+b.id)}
+ if(a==='catalog')return open({t:'catalog'});
+ if(a==='addObj')return addFromCatalog(t.dataset.type);
+ if(a==='moveObj')return startMove(SPOTS[t.dataset.spot],false);
+ if(a==='hideObj'){const h=SPOTS[t.dataset.spot];if(!h)return;const L=layout();
+  if(h.added){if(rmArm!==h.id){rmArm=h.id;view.keep=true;return render()}rmArm=null;L.added=L.added.filter(x=>x.id!==h.id);dropObj(h)}
+  else{if(!L.hidden.includes(h.id))L.hidden.push(h.id);hideObj(h,true)}save(true);applyMonth(false);return close()}
+ if(a==='unhide'){const L=layout(),h=SPOTS[t.dataset.spot];L.hidden=L.hidden.filter(x=>x!==t.dataset.spot);if(h)hideObj(h,false);save(true);applyMonth(false);view.keep=true;return render()}
+ if(a==='layoutReset'){if(rmArm!=='__all'){rmArm='__all';view.keep=true;return render()}rmArm=null;S.layout={hidden:[],moved:{},added:[]};applyLayout();save(true);applyMonth(false);menuMsg='Everything is back where it started.';view.keep=true;return render()}
  if(a==='backup'){const p1=v('bk-pass').value,p2=v('bk-pass2').value;
   if(p1.length<6){menuMsg='<span class="warnline">Choose a passcode with at least 6 characters.</span>';view.keep=true;return render()}
   if(p1!==p2){menuMsg='<span class="warnline">The two passcodes don’t match.</span>';view.keep=true;return render()}
@@ -1088,6 +1197,9 @@ sheet.addEventListener('change',e=>{const el=e.target;if(el.id==='sortRemember')
  if(ed==='gacct')G.account=el.value.trim().slice(0,40);
  save(!['spent','income','incomeAll','gsaved'].includes(ed));applyMonth(false)});
 document.getElementById('sortBtn').addEventListener('click',()=>{if(anim)stopAnim();selected=null;flyTo(null);budgetTab='sort';open({t:'budget'})});
+document.getElementById('mvRot').addEventListener('click',()=>{if(!mv)return;const h=mv.h,cx=h.ctr.x,cz=h.ctr.z;setPose(h,h.g.position.x,h.g.position.z,((h.k||0)+1)%4);setPose(h,h.g.position.x+cx-h.ctr.x,h.g.position.z+cz-h.ctr.z,h.k);moveTo(h.g.position.x,h.g.position.z)});
+document.getElementById('mvCancel').addEventListener('click',()=>endMove(false));
+document.getElementById('mvDone').addEventListener('click',()=>{if(!mv||!mv.ok)return;const h=mv.h,isNew=mv.isNew;endMove(true);if(isNew&&byId[h.id])select(h.id)});
 document.getElementById('menuBtn').addEventListener('click',()=>{if(anim)stopAnim();selected=null;flyTo(null);menuMsg='';resetArm=false;open({t:'menu'})});
 document.getElementById('budgetBtn').addEventListener('click',()=>{if(anim)stopAnim();selected=null;flyTo(null);budgetTab='overview';open({t:'budget'})});
 addEventListener('keydown',e=>{if(e.target.matches&&e.target.matches('input,select,textarea,button'))return;if(e.key===' '&&anim&&!anim.done){e.preventDefault();anim.paused=!anim.paused;updatePlaybar();return}if(e.key==='Escape'){if(view)close();else if(anim)stopAnim()}if(e.key==='ArrowLeft'&&month>0){if(anim)stopAnim();month--;applyMonth()}if(e.key==='ArrowRight'&&month<2){if(anim)stopAnim();month++;applyMonth()}});
@@ -1103,8 +1215,8 @@ function parseCSV(text){const rows=[];let row=[],f='',q=false;for(let i=0;i<text
 /* where a category goes when its home object is already taken: the spare objects first, then homes of set categories not in use */
 const SPARE=['sofa','plant','tub','toilet','kidbed'];
 function freeSpots(){const used=new Set(S.bills.map(b=>b.spot).filter(Boolean)),inUse=new Set(S.bills.map(b=>b.cat));
- return [...SPARE,...Object.keys(SPOTS).filter(x=>!SPARE.includes(x)).sort((a,b)=>(inUse.has(SPOTS[a].home)?1:0)-(inUse.has(SPOTS[b].home)?1:0))].filter(x=>SPOTS[x]&&!used.has(x))}
-function placeSet(b){if(b.cat==='custom'||b.spot)return;const home=SETBY[b.cat].spot;if(SPOTS[home]&&!billAt(home)){b.spot=home;return}const f=freeSpots().filter(x=>!SPOTS[x].home||!billOfCat(SPOTS[x].home));b.spot=f[0]||null}
+ return [...SPARE,...Object.keys(SPOTS).filter(x=>!SPARE.includes(x)).sort((a,b)=>(inUse.has(SPOTS[a].home)?1:0)-(inUse.has(SPOTS[b].home)?1:0))].filter(x=>SPOTS[x]&&!SPOTS[x].hidden&&!used.has(x))}
+function placeSet(b){if(b.cat==='custom'||b.spot)return;const home=SETBY[b.cat].spot;if(SPOTS[home]&&!SPOTS[home].hidden&&!billAt(home)){b.spot=home;return}const f=freeSpots().filter(x=>!SPOTS[x].home||!billOfCat(SPOTS[x].home));b.spot=f[0]||null}
 /* ---------- Excel, PDF and OFX/QFX: read in the browser (nothing is uploaded anywhere), then handed to the same importer as a CSV ---------- */
 const LIBS={xlsx:'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',pdf:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',pdfWorker:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'};
 const libP={};function lib(k){return libP[k]||(libP[k]=new Promise((res,rej)=>{const sc=document.createElement('script');sc.src=LIBS[k];sc.onload=res;sc.onerror=()=>{delete libP[k];rej({msg:'The file reader couldn’t load. Check your internet connection and try again.'})};document.head.appendChild(sc)}))}
@@ -1326,17 +1438,21 @@ function flyTo(h){if(!h){focusGoal.copy(HOME);zoomGoal=baseZoom;return}
 const ray=new THREE.Raycaster(),ndc=new THREE.Vector2(),ptrs=new Map();
 let downX=0,downY=0,moved=false,rotY=0,pinch0=0,zoom0=1,hoverQ=null,hovered=null;
 function hit(e){const r=canvas.getBoundingClientRect();ndc.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height)*2+1);ray.setFromCamera(ndc,cam);
- for(const x of ray.intersectObjects(targets,false)){const o=x.object;if(o.isSprite&&!o.visible)continue;if(o.userData.hot)return o.userData.hot}return null}
-canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ for(const x of ray.intersectObjects(targets,false)){const o=x.object;if(o.isSprite&&!o.visible)continue;if(o.userData.hot&&!o.userData.hot.hidden)return o.userData.hot}return null}
+canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);
+ if(mv&&ptrs.size===0){const p=groundAt(e),r=rectOf(mv.h);if(p&&(hit(e)===mv.h||(p.x>r[0]-0.6&&p.x<r[1]+0.6&&p.z>r[2]-0.6&&p.z<r[3]+0.6)))mv.drag={dx:p.x-mv.h.g.position.x,dz:p.z-mv.h.g.position.z}}
+ ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(ptrs.size===1){downX=e.clientX;downY=e.clientY;moved=false}else{const [a,b]=[...ptrs.values()];pinch0=Math.hypot(a.x-b.x,a.y-b.y)||1;zoom0=zoomGoal;moved=true}});
 canvas.addEventListener('pointermove',e=>{const p=ptrs.get(e.pointerId);
  if(!p){if(e.pointerType==='mouse'&&!hoverQ){hoverQ=e;requestAnimationFrame(()=>{hovered=hit(hoverQ);canvas.style.cursor=hovered?'pointer':'grab';hoverQ=null})}return}
  const dx=e.clientX-p.x;p.x=e.clientX;p.y=e.clientY;
  if(ptrs.size>=2){const [a,b]=[...ptrs.values()];zoomGoal=clamp(zoom0*Math.hypot(a.x-b.x,a.y-b.y)/pinch0,baseZoom*0.8,baseZoom*3.4);return}
  if(Math.hypot(e.clientX-downX,e.clientY-downY)>7)moved=true;
+ if(mv&&mv.drag){if(moved){const q=groundAt(e);if(q)moveTo(q.x-mv.drag.dx,q.z-mv.drag.dz)}return}
  if(moved){rotY=clamp(rotY+dx*0.006,-0.8,0.8);world.rotation.y=rotY;canvas.style.cursor='grabbing'}});
 canvas.addEventListener('pointerleave',()=>{hovered=null});
-function up(e){const had=ptrs.delete(e.pointerId);if(had&&!moved&&ptrs.size===0&&e.type==='pointerup'){const h=hit(e);if(h)select(h.id);else if(view)close()}if(!ptrs.size)canvas.style.cursor='grab'}
+function up(e){if(mv){const had=ptrs.delete(e.pointerId);if(had&&!moved&&ptrs.size===0&&e.type==='pointerup'&&!mv.drag){const q=groundAt(e);if(q)moveTo(q.x-(mv.h.fp[0]+mv.h.fp[1])/2,q.z-(mv.h.fp[2]+mv.h.fp[3])/2)}if(!ptrs.size)mv.drag=null;return}
+ const had=ptrs.delete(e.pointerId);if(had&&!moved&&ptrs.size===0&&e.type==='pointerup'){const h=hit(e);if(h)select(h.id);else if(view)close()}if(!ptrs.size)canvas.style.cursor='grab'}
 canvas.addEventListener('pointerup',up);canvas.addEventListener('pointercancel',up);
 canvas.addEventListener('wheel',e=>{e.preventDefault();zoomGoal=clamp(zoomGoal*Math.exp(-e.deltaY*0.0015),baseZoom*0.8,baseZoom*3.4)},{passive:false});
 
