@@ -568,10 +568,34 @@ function iconDraw(x,kind,cx,cy){x.lineCap='round';x.lineJoin='round';
   x.moveTo(cx+18,cy-14);x.lineTo(cx+34,cy+18);x.moveTo(cx+18,cy-14);x.lineTo(cx+14,cy-28);x.lineTo(cx+28,cy-30);x.stroke();
   x.strokeStyle='#3d3a52';x.lineWidth=7;x.beginPath();x.moveTo(cx-30,cy-26);x.lineTo(cx-12,cy-26);x.stroke()}}
 function iconFor(name,def){const n=name.toLowerCase();if(/car|truck|vehicle|van\b/.test(n))return'car';if(/camp|trip|vacation|travel|tent|holiday trip/.test(n))return'tent';if(/gift|holiday|christmas|birthday|present/.test(n))return'gift';if(/bike|bicycle|cycl/.test(n))return'bike';return /^(car|tent|gift|bike)$/.test(def)&&n===''?def:'jar'}
+const PLANT_NAME={cabbage:'Cabbage',sunflower:'Sunflower',penstemon:'Penstemon',tulip:'Tulip'};
+/* flat seed-packet illustrations of the four row plants, drawn around (cx,cy) inside a ~120px circle */
+function plantDraw(x,kind,cx,cy){const E=(ex,ey,rx,ry,rot,fill,stroke)=>{x.beginPath();x.ellipse(ex,ey,rx,ry,rot,0,7);x.fillStyle=fill;x.fill();if(stroke){x.strokeStyle=stroke;x.lineWidth=2.5;x.stroke()}};
+ const stem=(pts,w)=>{x.strokeStyle='#5aa66c';x.lineWidth=w;x.lineCap='round';x.beginPath();x.moveTo(pts[0],pts[1]);x.quadraticCurveTo(pts[2],pts[3],pts[4],pts[5]);x.stroke()};
+ const ground=()=>{E(cx,cy+52,44,9,0,'#c99c76')};
+ if(kind==='cabbage'){ground();
+  [[-30,22,30,22,-0.5],[30,22,30,22,0.5],[-18,10,28,24,-0.3],[18,10,28,24,0.3]].forEach(([dx,dy,rx,ry,r])=>E(cx+dx,cy+dy,rx,ry,r,'#79bf6c','#5e9f57'));
+  E(cx,cy+8,32,30,0,'#9dd88a','#6fb466');E(cx,cy+2,22,21,0,'#c3eba9','#8fcf7c');E(cx,cy-2,12,11,0,'#e0f7cc');
+  x.strokeStyle='#6fb466';x.lineWidth=2;[[-1,1],[1,1]].forEach(([s2])=>{x.beginPath();x.moveTo(cx,cy+34);x.quadraticCurveTo(cx+s2*16,cy+18,cx+s2*24,cy-4);x.stroke()})}
+ else if(kind==='sunflower'){ground();stem([cx,cy+52,cx+4,cy+16,cx,cy-14],7);E(cx-16,cy+26,16,7,-0.5,'#7cc47f');E(cx+16,cy+14,16,7,0.5,'#7cc47f');
+  const hy=cy-20;for(let i=0;i<14;i++){const a=i/14*Math.PI*2;E(cx+Math.cos(a)*24,hy+Math.sin(a)*24,8,17,a+Math.PI/2,'#ffcf4d','#eab547')}
+  E(cx,hy,17,17,0,'#9b6436');x.fillStyle='#7a4a26';for(let i=0;i<9;i++){const a=i*2.4,r=4+i*1.2;x.beginPath();x.arc(cx+Math.cos(a)*r,hy+Math.sin(a)*r,1.8,0,7);x.fill()}}
+ else if(kind==='tulip'){ground();stem([cx,cy+52,cx-3,cy+20,cx,cy-8],6);
+  x.fillStyle='#7cc47f';[[-1],[1]].forEach(([d])=>{x.beginPath();x.moveTo(cx,cy+50);x.quadraticCurveTo(cx+d*34,cy+20,cx+d*20,cy-4);x.quadraticCurveTo(cx+d*14,cy+26,cx,cy+50);x.fill()});
+  const ty=cy-14;x.fillStyle='#f59ab5';x.strokeStyle='#e0779a';x.lineWidth=2.5;x.beginPath();x.moveTo(cx-24,ty-22);x.quadraticCurveTo(cx-28,ty+16,cx,ty+18);x.quadraticCurveTo(cx+28,ty+16,cx+24,ty-22);
+  x.lineTo(cx+12,ty-8);x.lineTo(cx,ty-28);x.lineTo(cx-12,ty-8);x.closePath();x.fill();x.stroke();
+  x.fillStyle='#f9b8cb';x.beginPath();x.moveTo(cx-10,ty-6);x.quadraticCurveTo(cx,ty-36,cx+10,ty-6);x.quadraticCurveTo(cx,ty+12,cx-10,ty-6);x.fill()}
+ else{/* penstemon */ground();
+  [[0,-52,0],[-18,-26,-1],[18,-30,1]].forEach(([dx,top,side])=>{stem([cx+dx*0.3,cy+52,cx+dx*0.5,cy+10,cx+dx,cy+top],side?3.5:4.5);
+   const n=side?5:8;for(let j=0;j<n;j++){const t=j/(n-1),by=cy+top+6+t*(side?40:58),bx=cx+dx*(1-t*0.4)+(j%2?6:-6),r=(j%2?0.5:-0.5);
+    x.save();x.translate(bx,by);x.rotate(r);x.fillStyle=j%3===0?'#c7b2f2':'#9f86e3';x.beginPath();x.moveTo(-3,-6);x.lineTo(3,-6);x.lineTo(7,8);x.quadraticCurveTo(0,11,-7,8);x.closePath();x.fill();
+    x.fillStyle='#f3ecff';x.beginPath();x.ellipse(0,8,4,2,0,0,7);x.fill();x.restore()}});
+  E(cx-14,cy+42,14,5,-0.4,'#7cc47f');E(cx+14,cy+40,14,5,0.4,'#7cc47f');E(cx+4,cy+30,12,4,0.2,'#7cc47f')}}
 function packetDraw(i,m){const gl=S.goals[i],lk=rows[i].look,x=lk.tex.c.getContext('2d');x.clearRect(0,0,256,344);
  x.fillStyle='#fffaf3';rrect(x,0,0,256,344,20);x.fill();x.fillStyle=lk.color;rrect(x,10,10,236,324,16);x.fill();
- x.fillStyle='#fffaf3';x.beginPath();x.arc(128,104,74,0,7);x.fill();iconDraw(x,iconFor(gl.name,lk.icon),128,108);
- x.fillStyle=lk.ink;x.textAlign='center';x.textBaseline='alphabetic';let fs=32;do{x.font=`700 ${fs}px Fredoka, sans-serif`;fs-=2}while(x.measureText(gl.name).width>220&&fs>14);x.fillText(gl.name,128,218);
+ x.fillStyle='#fffaf3';x.beginPath();x.arc(128,94,68,0,7);x.fill();x.save();x.beginPath();x.arc(128,94,68,0,7);x.clip();plantDraw(x,lk.plant,128,92);x.restore();
+ x.fillStyle=lk.ink;x.textAlign='center';x.textBaseline='alphabetic';x.font='600 17px Fredoka, sans-serif';x.globalAlpha=.75;x.fillText(`${PLANT_NAME[lk.plant]||''} seeds`.toUpperCase().split('').join(String.fromCharCode(8202)),128,187);x.globalAlpha=1;
+ const nm=gl.name||' ';let fs=32;do{x.font=`700 ${fs}px Fredoka, sans-serif`;fs-=2}while(x.measureText(nm).width>220&&fs>14);x.fillText(nm,128,220);
  x.font='600 23px Fredoka, sans-serif';x.fillText(`${fmt(gl.a[m])} in ${MONTHS[m]}`,128,252);
  const bal=balance(gl,m),p=gl.goal>0?Math.min(1,bal/gl.goal):0;x.fillStyle='#ffffffa8';rrect(x,34,270,188,18,9);x.fill();x.fillStyle=lk.ink;rrect(x,34,270,Math.max(18,188*p),18,9);x.fill();
  x.font='500 18px Fredoka, sans-serif';x.fillText(`${fmt(bal)} of ${fmt(gl.goal)}`,128,318);lk.tex.t.needsUpdate=true}
@@ -823,13 +847,30 @@ function vSpot(h){const home=h.home&&SETBY[h.home],homeFree=home&&!billOfCat(hom
  <div class="grid2" style="margin-top:10px"><label class="f">Monthly budget<input type="number" inputmode="decimal" id="n-budget" placeholder="0"></label><label class="f">Spent in ${MONTHS[month]}<input type="number" inputmode="decimal" id="n-spent" placeholder="Same as budget"></label></div>
  <div class="actions"><button class="btn sm" data-act="addHere" data-spot="${h.id}">Add custom category</button></div>
  ${movable.length?`<h3>Or move a category here</h3><div class="grid2"><select id="m-bill" aria-label="Category to move">${movable.map(b=>`<option value="${b.id}">${esc(b.name)}${b.spot&&SPOTS[b.spot]?' (in '+esc(SPOTS[b.spot].label)+')':' (needs a spot)'}</option>`).join('')}</select><button class="btn sm ghost" data-act="moveHere" data-spot="${h.id}">Move here</button></div>`:''}`}
-function vGoal(h){const tank=h.kind==='tank',g=tank?S.tank:S.goals[h.gi],v=g.a[month],bal=balance(g,month),met=v>=g.target,left=Math.max(0,g.goal-bal),mo=g.target>0?Math.ceil(left/g.target):0;
+const goalOf=id=>id==='tank'?S.tank:S.goals[+String(id).slice(4)];
+function vGoal(h){const tank=h.kind==='tank',g=tank?S.tank:S.goals[h.gi],bal=balance(g,month),noTx=!(Array.isArray(S.tx[month])&&S.tx[month].length),gid=tank?'tank':'goal'+h.gi;
+ const f=(k,label,val,type='number',extra='')=>`<label class="f" ${extra}>${label}<input type="${type}" ${type==='number'?'inputmode="decimal" step="any"':'maxlength="40"'} data-live="${k}" data-gid="${gid}" value="${type==='number'?Math.round(val*100)/100:esc(val)}"></label>`;
+ return `<div id="gview">${goalView(h)}</div><h3>Edit ${tank?'the tower':'this row'}</h3><p class="sub">The ${tank?'plaque and gauge':'seed packet and plants'} change as you type.</p>
+ <div class="grid2" style="margin-top:10px">${f('name','Name',g.name,'text','style="grid-column:1 / -1"')}${f('bal','Saved so far',bal)}${f('goal','Goal total',g.goal)}${f('target','Target / month',g.target)}${noTx?f('month',`Added in ${MONTHS[month]}`,g.a[month]):`<p class="sub" style="align-self:end;margin:0">${MONTHS[month]}’s deposits come from your uploaded transactions.</p>`}
+ ${f('acct','Bank account',g.account||'','text','style="grid-column:1 / -1"')}</div>`}
+function goalView(h){const tank=h.kind==='tank',g=tank?S.tank:S.goals[h.gi],v=g.a[month],bal=balance(g,month),met=v>=g.target,left=Math.max(0,g.goal-bal),mo=g.target>0?Math.ceil(left/g.target):0;
  const where=tank?`The water tower · ${g.goal?Math.round(bal/g.goal*100):0}% full`:`Garden row ${h.gi+1} · ${seeds(g,month)} of ${SLOTS} plants · each plant is 10% of the goal${gardener.row===h.gi?' · the gardener is working here':''}`;
  return `${head(tank?'Safety net':'Savings goal')}<h2>${esc(g.name)}</h2><p class="where">${where}${g.account?' · '+esc(g.account):''}</p>
  <div class="big"><b>${fmt(v)}</b><span class="pill ${met?'ok':'over'}">${met?(v>g.target?fmt(v-g.target)+' above target':'Target met'):fmt(g.target-v)+' short of target'}</span></div>
  <div class="meter ${tank?'water':''}"><i style="width:${g.goal?Math.min(100,bal/g.goal*100):0}%"></i></div>
  <p class="sub">${fmt(bal)} saved of ${fmt(g.goal)} · target ${fmt(g.target)} a month</p>
  ${histHTML(g.a,month)}<p class="note">${left?(mo?`At ${fmt(g.target)} a month the ${tank?'tank fills':'goal is reached'} in about ${mo} month${mo===1?'':'s'}.`:'Set a monthly target to see when you’ll get there.'):'Goal reached. Time to pick the next one.'} ${tank?'Every deposit raises the water line on the tower’s gauge.':'A new plant sprouts each time the balance passes the next 10% of the goal.'}</p>`}
+let liveT=null;
+sheet.addEventListener('input',e=>{const el=e.target,k=el.dataset.live;if(!k)return;const g=goalOf(el.dataset.gid);if(!g)return;const n=num(el.value);
+ if(k==='name')g.name=el.value.slice(0,40);
+ if(k==='bal')g.start=Math.round((n-g.a.slice(0,month+1).reduce((s,v)=>s+v,0))*100)/100;
+ if(k==='goal')g.goal=Math.max(0,n);
+ if(k==='target')g.target=Math.max(0,n);
+ if(k==='month'){g.a[month]=Math.max(0,n);const bi=sheet.querySelector('[data-live=bal]');if(bi)bi.value=Math.round(balance(g,month)*100)/100}
+ if(k==='acct')g.account=el.value.slice(0,40);
+ applyMonth(false);const gv=document.getElementById('gview'),h=byId[el.dataset.gid];if(gv&&h)gv.innerHTML=goalView(h);
+ clearTimeout(liveT);liveT=setTimeout(()=>save(true),400)});
+sheet.addEventListener('focusout',e=>{const el=e.target;if(el.dataset.live!=='name')return;const g=goalOf(el.dataset.gid);if(g&&!g.name.trim()){g.name='Savings goal';el.value=g.name;applyMonth(false);const gv=document.getElementById('gview'),h=byId[el.dataset.gid];if(gv&&h)gv.innerHTML=goalView(h);save(true)}});
 function segments(){const inc=S.income[month]||0;
  const items=S.bills.map(b=>({id:b.id,name:b.name,v:b.a[month],over:isOver(b)?b.a[month]-b.budget:0})).sort((a,b)=>b.v-a.v).map((x,i)=>Object.assign(x,{c:PAL[i%PAL.length]}));
  const sav=[{id:'tank',name:S.tank.name,v:S.tank.a[month],c:'#4f9fe0'},...S.goals.map((g,i)=>({id:'goal'+i,name:g.name,v:g.a[month],c:rows[i]?rows[i].look.color:'#cccccc'}))];
