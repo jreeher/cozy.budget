@@ -886,9 +886,9 @@ function addFromCatalog(type){const C=CATALOG[type],L=layout();if(!C)return;if(L
  const pref=C.where==='out'?[-9,9]:C.where==='in'?[-12,-1]:[-9,3],a={id:'add_'+Date.now().toString(36)+(addedSeq++),type,x:pref[0],z:pref[1],k:0},h=addObj(a);
  if(!freePlace(h,pref)){dropObj(h);menuMsg='<span class="warnline">There’s no open space left for that. Move or remove something first.</span>';return render()}
  a.x=h.g.position.x;a.z=h.g.position.z;L.added.push(a);startMove(h,true)}
-function vCatalog(){const L=layout();return `${head('Add an object')}<h2>Furniture catalog</h2><p class="sub">Pick something and it appears in the house. Drag it where you want it, then give it a category. ${L.added.length}/20 added.</p>
+function vCatalog(){const L=layout();return `${head('Add an object')}<h2>Furniture catalog</h2><p class="sub">Tap to add, then drag it into place. ${L.added.length}/20 added.</p>
  ${[['Inside','in'],['Inside or out','any'],['Yard','out']].map(([t,w])=>`<h3>${t}</h3><div class="grid2">${Object.entries(CATALOG).filter(([k,c])=>c.where===w).map(([k,c])=>`<button class="btn sm ghost" style="justify-content:flex-start" data-act="addObj" data-type="${k}">+ ${esc(c.name)}</button>`).join('')}</div>`).join('')}`}
-const objActions=h=>h&&h.orig?`<div class="actions">${h.movable?`<button class="btn sm ghost" data-act="moveObj" data-spot="${h.id}">Move ${h.added||!h.wall?'or turn':''} it</button>`:''}<button class="btn sm ghost" data-act="hideObj" data-spot="${h.id}">${h.added?(rmArm===h.id?'Tap again to remove':'Remove from house'):'Remove from house'}</button></div>${h.movable?'':'<p class="sub">This one sits on a wall or counter, so it stays put, but you can remove it.</p>'}`:'';
+const objActions=h=>h&&h.orig?`<div class="actions">${h.movable?`<button class="btn sm ghost" data-act="moveObj" data-spot="${h.id}">Move ${h.added||!h.wall?'or turn':''} it</button>`:''}<button class="btn sm ghost" data-act="hideObj" data-spot="${h.id}">${h.added?(rmArm===h.id?'Tap again to remove':'Remove from house'):'Remove from house'}</button></div>${h.movable?'':'<p class="sub">Wall and counter items can’t move.</p>'}`:'';
 let rmArm=null;
 /* ---------- State → scene ---------- */
 const byId={};hot.forEach(h=>byId[h.id]=h);hot.forEach(h=>{h.room0=h.room});layoutOn=true;
@@ -905,7 +905,7 @@ function applyMonth(rerender=true){let overN=0;
  const spent=S.bills.reduce((s,b)=>s+b.a[month],0)+unsortedSum(month),saved=[S.tank,...S.goals].reduce((s,g)=>s+g.a[month],0),left=S.income[month]-spent-saved;
  document.getElementById('stats').innerHTML=[['Take-home',S.income[month]],['Bills',spent],['Saved',saved,'saved'],['Left over',left,left<0?'neg':'']]
   .map(([l,v,c])=>`<div class="stat ${c||''}"><span>${l}</span><b>${v<0?'−':''}${fmt(Math.abs(v))}</b></div>`).join('');
- document.getElementById('hint').innerHTML=!S.bills.length?'Tap any object to give it a category':overN?`<b>${overN} bill${overN===1?'':'s'} over budget</b> · red rings · tap anything`:'Everything is on budget · tap anything';
+ document.getElementById('hint').innerHTML=!S.bills.length?'Tap any object to give it a category':overN?`<b>${overN} over budget</b> · tap anything`:'All on budget · tap anything';
  document.getElementById('startBtn').style.display=edited?'none':'';
  {const n=unsortedOf(month).length,sb=document.getElementById('sortBtn');sb.style.display=n?'':'none';sb.textContent=`Sort ${n} purchase${n===1?'':'s'}`}
  document.querySelectorAll('#months button').forEach((b,i)=>b.setAttribute('aria-pressed',i===month));
@@ -922,11 +922,11 @@ const catOpts=sel=>`<optgroup label="Set categories">${SET.map(c=>{const o=billO
 const freeOpts=sel=>Object.values(SPOTS).filter(h=>h.id===sel||(!billAt(h.id)&&!h.hidden)).map(h=>`<option value="${h.id}" ${h.id===sel?'selected':''}>${esc(h.room)} · ${esc(h.label)}${h.home&&!billOfCat(h.home)?'':''}</option>`).join('');
 function homelessHTML(){const hl=S.bills.filter(b=>!b.spot||!SPOTS[b.spot]);return hl.length?`<div class="note" style="background:#f3eefc"><b>${hl.length} categor${hl.length===1?'y needs':'ies need'} a spot in the house.</b> Tap ${hl.length===1?'it':'one'} to choose an empty object: ${hl.map(b=>`<button class="btn sm ghost" style="min-height:36px;margin:6px 6px 0 0;background:#fff" data-pick="${b.id}">${esc(b.name)}</button>`).join('')}</div>`:''}
 const linesHTML=b=>(b.lines&&(b.lines.length>1||b.lines[0].name!==b.name)?`<p class="sub" style="margin-top:8px;grid-column:1 / -1">From your budget: ${b.lines.map(l=>`${esc(l.name)} ${fmt(l.budget)}`).join(' · ')}</p>`:'')+
- (coversOf(b).length?`<p class="sub" style="margin-top:8px;grid-column:1 / -1">Collects purchases of ${coversOf(b).filter(id=>!billOfCat(id)).map(id=>esc(SETBY[id].name)).join(' and ')||'nothing yet (those categories have their own spots)'}.</p>`:'');
+ (coversOf(b).length?`<p class="sub" style="margin-top:8px;grid-column:1 / -1">Collects purchases of ${coversOf(b).filter(id=>!billOfCat(id)).map(id=>esc(SETBY[id].name)).join(' and ')||'nothing (those have their own spots)'}.</p>`:'');
 function histHTML(arr,cur){const mx=Math.max(...arr,1);return `<div class="hist">${arr.map((v,i)=>`<div class="${i===cur?'cur':''}"><em>${fmt(v)}</em><i style="height:${Math.max(6,v/mx*70)}px"></i>${MONTHS[i]}</div>`).join('')}</div>`}
 const head=tag=>`<div class="sh-top"><span class="tag">${tag}</span><button class="x" data-act="close" aria-label="Close">×</button></div>`;
 function vBill(b){const v=b.a[month],d=v-b.budget,over=d>0,h=SPOTS[b.spot],cu=b.cat==='custom';
- return `${head(cu?'Custom category':'Set category')}<h2>${esc(b.name)}</h2><p class="where">${h?esc(h.room)+' · '+esc(h.label):'<b>Needs a spot in the house</b>: choose one under “Lives in” below'}${b.due?' · due '+esc(b.due):''}</p>
+ return `${head(cu?'Custom category':'Set category')}<h2>${esc(b.name)}</h2><p class="where">${h?esc(h.room)+' · '+esc(h.label):'<b>Needs a spot</b>: pick one under “Lives in”'}${b.due?' · due '+esc(b.due):''}</p>
  <div class="big"><b>${fmt(v)}</b><span class="pill ${over?'over':'ok'}">${d===0?'Right on budget':over?fmt(d)+' over budget':fmt(-d)+' under budget'}</span></div>
  <div class="meter ${over?'over':''}"><i style="width:${b.budget?Math.min(100,v/b.budget*100):100}%"></i></div>
  <p class="sub">Budget ${fmt(b.budget)} a month · ${S.income[month]?(v/S.income[month]*100).toFixed(1):0}% of take-home pay</p>${linesHTML(b)}
@@ -936,9 +936,9 @@ function vBill(b){const v=b.a[month],d=v-b.budget,over=d>0,h=SPOTS[b.spot],cu=b.
   <div class="grid2" style="margin-top:10px"><label class="f">Monthly budget<input type="number" inputmode="decimal" id="e-budget" value="${b.budget}"></label><label class="f">Spent in ${MONTHS[month]}<input type="number" inputmode="decimal" id="e-spent" value="${v}"></label></div>
   <div class="grid2" style="margin-top:10px"><label class="f">Category<select id="e-cat">${catOpts(b.cat)}</select></label><label class="f">Lives in<select id="e-spot"><option value="">Not in the house</option>${spotOpts(b.spot)}</select></label></div>
   <div class="actions"><button class="btn sm" data-act="saveBill" data-id="${b.id}">Save</button><button class="btn sm danger" data-act="delBill" data-id="${b.id}">Delete category</button></div>
- </details>${h?`<details class="edit"><summary>Move or remove the ${esc(h.label.toLowerCase())}</summary>${objActions(h)}<p class="sub">Removing it sends ${esc(b.name)} to the “needs a spot” list.</p></details>`:''}`}
+ </details>${h?`<details class="edit"><summary>Move or remove the ${esc(h.label.toLowerCase())}</summary>${objActions(h)}<p class="sub">${esc(b.name)} will need a new spot.</p></details>`:''}`}
 function vSpot(h){const home=h.home&&SETBY[h.home],homeFree=home&&!billOfCat(home.id),movable=S.bills.filter(b=>b.spot!==h.id).sort((a,b)=>(a.spot?1:0)-(b.spot?1:0));
- return `${head(esc(h.room))}<h2>${esc(h.label)}</h2><p class="where">${home?(homeFree?`This is the home of the set category <b>${esc(home.name)}</b>, which isn’t in your budget yet.`:`${esc(home.name)} lives somewhere else, so this spot is free.`):'A free spot for a custom category.'}</p>
+ return `${head(esc(h.room))}<h2>${esc(h.label)}</h2><p class="where">${home?(homeFree?`Home of <b>${esc(home.name)}</b> (not in your budget).`:'Free spot.'):'Free spot.'}</p>
  ${homeFree?`<h3>Add ${esc(home.name)}</h3><div class="grid2"><label class="f">Monthly budget<input type="number" inputmode="decimal" id="h-budget" placeholder="0"></label><div class="actions" style="margin:0;align-self:end"><button class="btn sm" data-act="addSetHere" data-spot="${h.id}" data-cat="${home.id}">Add ${esc(home.name)}</button></div></div>`:''}
  <h3>${homeFree?'Or make':'Make'} a custom category here</h3>
  <label class="f">Name<input type="text" id="n-name" placeholder="e.g. Babysitting, Hosting, Music lessons"></label>
@@ -949,7 +949,7 @@ function vSpot(h){const home=h.home&&SETBY[h.home],homeFree=home&&!billOfCat(hom
 const goalOf=id=>id==='tank'?S.tank:S.goals[+String(id).slice(4)];
 function vGoal(h){const tank=h.kind==='tank',g=tank?S.tank:S.goals[h.gi],bal=balance(g,month),noTx=!(Array.isArray(S.tx[month])&&S.tx[month].length),gid=tank?'tank':'goal'+h.gi;
  const f=(k,label,val,type='number',extra='')=>`<label class="f" ${extra}>${label}<input type="${type}" ${type==='number'?'inputmode="decimal" step="any"':'maxlength="40"'} data-live="${k}" data-gid="${gid}" value="${type==='number'?Math.round(val*100)/100:esc(val)}"></label>`;
- return `<div id="gview">${goalView(h)}</div><h3>Edit ${tank?'the tower':'this row'}</h3><p class="sub">The ${tank?'plaque and gauge':'seed packet and plants'} change as you type.</p>
+ return `<div id="gview">${goalView(h)}</div><h3>Edit ${tank?'the tower':'this row'}</h3><p class="sub">Updates as you type.</p>
  <div class="grid2" style="margin-top:10px">${f('name','Name',g.name,'text','style="grid-column:1 / -1"')}${f('bal','Saved so far',bal)}${f('goal','Goal total',g.goal)}${f('target','Target / month',g.target)}${noTx?f('month',`Added in ${MONTHS[month]}`,g.a[month]):`<p class="sub" style="align-self:end;margin:0">${MONTHS[month]}’s deposits come from your uploaded transactions.</p>`}
  ${f('acct','Bank account',g.account||'','text','style="grid-column:1 / -1"')}</div>`}
 function goalView(h){const tank=h.kind==='tank',g=tank?S.tank:S.goals[h.gi],v=g.a[month],bal=balance(g,month),met=v>=g.target,left=Math.max(0,g.goal-bal),mo=g.target>0?Math.ceil(left/g.target):0;
@@ -958,7 +958,7 @@ function goalView(h){const tank=h.kind==='tank',g=tank?S.tank:S.goals[h.gi],v=g.
  <div class="big"><b>${fmt(v)}</b><span class="pill ${met?'ok':'over'}">${met?(v>g.target?fmt(v-g.target)+' above target':'Target met'):fmt(g.target-v)+' short of target'}</span></div>
  <div class="meter ${tank?'water':''}"><i style="width:${g.goal?Math.min(100,bal/g.goal*100):0}%"></i></div>
  <p class="sub">${fmt(bal)} saved of ${fmt(g.goal)} · target ${fmt(g.target)} a month</p>
- ${histHTML(g.a,month)}<p class="note">${left?(mo?`At ${fmt(g.target)} a month the ${tank?'tank fills':'goal is reached'} in about ${mo} month${mo===1?'':'s'}.`:'Set a monthly target to see when you’ll get there.'):'Goal reached. Time to pick the next one.'} ${tank?'Every deposit raises the water line on the tower’s gauge.':'A new plant sprouts each time the balance passes the next 10% of the goal.'}</p>`}
+ ${histHTML(g.a,month)}<p class="note">${left?(mo?`At ${fmt(g.target)} a month the ${tank?'tank fills':'goal is reached'} in about ${mo} month${mo===1?'':'s'}.`:'Set a monthly target to see when.'):'Goal reached!'} ${tank?'':'Each plant is 10% of the goal.'}</p>`}
 let liveT=null;
 sheet.addEventListener('input',e=>{const el=e.target,k=el.dataset.live;if(!k)return;const g=goalOf(el.dataset.gid);if(!g)return;const n=num(el.value);
  if(k==='name')g.name=el.value.slice(0,40);
@@ -976,11 +976,11 @@ function segments(){const inc=S.income[month]||0;
  const un=unsortedSum(month);if(un>0)items.push({id:'__sort',name:'Not sorted yet',v:un,c:'#cfc7dc',over:0});
  const used=[...items,...sav].reduce((s,x)=>s+x.v,0);return {inc,items,sav,used,left:inc-used}}
 /* ---------- Getting started: the house shows a made-up budget until you bring in your own ---------- */
-function vStart(){return `${head('Get started')}<h2>Make it your own</h2><p class="sub">The house is showing a made-up example budget. Bring in yours and every object, garden row and number becomes your own. Everything stays on this device.</p>
- <div class="card"><h3>1. Upload your budget</h3><p class="sub">A spreadsheet, CSV or PDF with your monthly bills and amounts, in any layout. Each line is matched to a set category with its own spot in the house; anything that doesn’t fit becomes a custom category you place yourself. Savings lines become garden rows.</p>
-  <label class="drop" id="drop" style="margin-top:10px"><b style="color:var(--ink)">Choose your budget</b><span>Excel, CSV or PDF</span><input type="file" id="file" accept=".csv,.xlsx,.xls,.xlsm,.ods,.json,.pdf,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="position:absolute;opacity:0;width:1px;height:1px"></label></div>
- <div class="card"><h3>2. Then add a bank statement</h3><p class="sub">After your budget is in, upload a month of transactions (PDF statement, CSV or OFX/QFX) from Budget → Upload. Purchases land on the right objects and the month plays back day by day.</p></div>
- <div class="card"><h3>No spreadsheet?</h3><p class="sub">Start with an empty house and add your categories and savings goals by hand.</p><div class="actions"><button class="btn sm ghost" data-act="startBlank">Start from scratch</button><button class="btn sm ghost" data-act="goMenuRestore">Restore a backup</button></div></div>`}
+function vStart(){return `${head('Get started')}<h2>Make it your own</h2><p class="sub">This is an example budget. Upload yours to make the house your own. Nothing leaves this device.</p>
+ <div class="card"><h3>1. Upload your budget</h3><p class="sub">Your monthly bills and savings, in any layout.</p>
+  <label class="drop" id="drop-b" style="margin-top:10px"><b style="color:var(--ink)">Choose your budget</b><span>Excel, CSV or PDF</span><input type="file" id="file-b" accept=".csv,.xlsx,.xls,.xlsm,.ods,.json,.pdf,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="position:absolute;opacity:0;width:1px;height:1px"></label></div>
+ <div class="card"><h3>2. Then add a bank statement</h3><p class="sub">Then upload a month of statements in Budget → Upload to watch it play out.</p></div>
+ <div class="card"><h3>No spreadsheet?</h3><p class="sub">Start empty and add categories by hand.</p><div class="actions"><button class="btn sm ghost" data-act="startBlank">Start from scratch</button><button class="btn sm ghost" data-act="goMenuRestore">Restore a backup</button></div></div>`}
 /* ---------- Menu: backup, restore, storage, uploads ---------- */
 const META='cozy-budget-meta';var meta={};try{meta=JSON.parse(localStorage.getItem(META)||'{}')||{}}catch(e){}
 const saveMeta=()=>{try{localStorage.setItem(META,JSON.stringify(meta))}catch(e){}};
@@ -989,7 +989,7 @@ function updateMenuDot(){const b=document.getElementById('menuBtn');if(b)b.class
 /* ask the browser not to clear this site's storage on its own (Chrome grants it quietly for sites you use; Safari exempts home-screen apps) */
 var persisted=null;function askPersist(){if(navigator.storage&&navigator.storage.persist)navigator.storage.persisted().then(p=>p||navigator.storage.persist()).then(p=>{persisted=!!p;const el=document.getElementById('persistLine');if(el)el.innerHTML=persistText()}).catch(()=>{})}
 const standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
-const persistText=()=>standalone()?'<span class="okline">✓ Installed on your home screen, so the browser won’t clear it on its own.</span>':persisted?'<span class="okline">✓ This browser has agreed not to clear it on its own.</span>':'The browser could clear it if you clear site data or storage runs low, so keep a backup.';
+const persistText=()=>standalone()?'<span class="okline">✓ Protected (home-screen app).</span>':persisted?'<span class="okline">✓ Protected from automatic cleanup.</span>':'Clearing site data would erase it, so keep a backup.';
 /* encrypted backups: PBKDF2-SHA-256 (310,000 rounds) turns the passcode into an AES-256-GCM key; the file holds only the scrambled data */
 const b64e=u8=>{let s2='';for(let i=0;i<u8.length;i+=0x8000)s2+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s2)};
 const b64d=t=>Uint8Array.from(atob(t),c=>c.charCodeAt(0));
@@ -1020,28 +1020,28 @@ function restoreSummary(p){const st=p.state,months=Object.keys(st.tx||{}).filter
  return `${p.savedAt?'Saved '+whenText(p.savedAt)+': ':''}${st.bills.length} categories, ${st.goals.length} garden row${st.goals.length===1?'':'s'}, ${months} month${months===1?'':'s'} of transactions${Object.keys(st.rules||{}).length?`, ${Object.keys(st.rules).length} sorting choices`:''}.`}
 function vMenu(){const un=unsortedOf(month).length,iOS=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
  return `${head('Menu')}<h2>Cozy Budget</h2>${menuMsg?`<p class="msg">${menuMsg}</p>`:''}
- <div class="card"><h3>Your data</h3><p class="sub">Your budget and transactions are saved only on this device. Nothing is sent to a server, and files you upload are read right here.</p><p class="sub" id="persistLine" style="margin-top:8px">${persistText()}</p></div>
- <div class="card"><h3>Back up</h3><p class="sub">${meta.lastBackup?`Last backup: ${whenText(meta.lastBackup)}.`:edited?'<span class="warnline">Not backed up yet.</span>':'Nothing to back up yet: this is the sample budget.'} The backup is a file locked with a passcode you choose. Save it to Files, iCloud Drive or Google Drive.</p>
+ <div class="card"><h3>Your data</h3><p class="sub">Saved only on this device. Nothing is sent to a server.</p><p class="sub" id="persistLine" style="margin-top:8px">${persistText()}</p></div>
+ <div class="card"><h3>Back up</h3><p class="sub">${meta.lastBackup?`Last backup: ${whenText(meta.lastBackup)}.`:edited?'<span class="warnline">Not backed up yet.</span>':'Nothing to back up yet: this is the sample budget.'} Saves a passcode-locked file to Files, iCloud or Drive.</p>
   <div class="grid2" style="margin-top:10px"><label class="f">Passcode<input type="password" id="bk-pass" autocomplete="new-password" placeholder="6 or more characters"></label><label class="f">Type it again<input type="password" id="bk-pass2" autocomplete="new-password"></label></div>
-  <p class="sub" style="margin-top:8px">There’s no way to recover a forgotten passcode, so keep it somewhere safe.</p>
+  <p class="sub" style="margin-top:8px">A forgotten passcode can’t be recovered.</p>
   <div class="actions"><button class="btn sm" data-act="backup">Save backup file</button></div></div>
  <div class="card"><h3>Restore</h3>
   ${restoreReady?`<p class="sub">${esc(restoreSummary(restoreReady))}</p><p class="sub" style="margin-top:8px"><b>This replaces the budget on this device.</b></p><div class="actions"><button class="btn sm" data-act="restoreApply">Replace with this backup</button><button class="btn sm ghost" data-act="restoreCancel">Cancel</button></div>`
   :restoreFile?`<p class="sub">Enter the passcode for ${esc(restoreFile.name)}.</p><label class="f" style="margin-top:10px">Passcode<input type="password" id="rs-pass" autocomplete="current-password"></label><div class="actions"><button class="btn sm" data-act="restoreOpen">Open backup</button><button class="btn sm ghost" data-act="restoreCancel">Cancel</button></div>`
-  :`<p class="sub">Bring back a budget from a backup file, on this phone or a new one.</p><label class="drop" style="margin-top:10px"><b style="color:var(--ink)">Choose a backup file</b><span>cozy-budget-backup-….json</span><input type="file" id="rs-file" accept=".json,application/json" style="position:absolute;opacity:0;width:1px;height:1px"></label>`}</div>
- <div class="card"><h3>Budget and statements</h3><p class="sub">Upload a budget or a bank statement (CSV, Excel, PDF, OFX/QFX), edit your categories, or sort purchases that didn’t match.</p>
+  :`<p class="sub">Load a backup on this or another device.</p><label class="drop" style="margin-top:10px"><b style="color:var(--ink)">Choose a backup file</b><span>cozy-budget-backup-….json</span><input type="file" id="rs-file" accept=".json,application/json" style="position:absolute;opacity:0;width:1px;height:1px"></label>`}</div>
+ <div class="card"><h3>Budget and statements</h3><p class="sub">Upload, edit or sort.</p>
   <div class="actions"><button class="btn sm" data-act="goBudget" data-to="upload">Upload</button><button class="btn sm ghost" data-act="goBudget" data-to="edit">Edit budget</button>${un?`<button class="btn sm ghost" data-act="goBudget" data-to="sort">Sort ${un}</button>`:''}</div></div>
- <div class="card"><h3>Objects in your house</h3><p class="sub">Add furniture from the catalog, drag things around, or remove what you don’t need. To move or remove something, tap it in the house.</p>
+ <div class="card"><h3>Objects in your house</h3><p class="sub">Add furniture, or tap an object to move or remove it.</p>
   <div class="actions"><button class="btn sm" data-act="catalog">Add an object</button>${(layout().hidden.length||Object.keys(layout().moved).length||layout().added.length)?`<button class="btn sm ghost" data-act="layoutReset">${rmArm==='__all'?'Tap again to put everything back':'Put everything back'}</button>`:''}</div>
   ${layout().hidden.length?`<p class="sub" style="margin-top:10px">Removed: ${layout().hidden.map(id=>SPOTS[id]?`<button class="btn sm ghost" style="min-height:34px;margin:4px 6px 0 0;background:#fff" data-act="unhide" data-spot="${id}">↩ ${esc(SPOTS[id].label)}</button>`:'').join('')}</p>`:''}</div>
- <div class="card"><h3>Put it on your home screen</h3><p class="sub">${standalone()?'<span class="okline">✓ You’re using the home-screen app.</span>':installEvt?'Install it like an app. It opens full screen and keeps your data safer from automatic cleanup.':iOS?'In Safari, tap the Share button, then <b>Add to Home Screen</b>. It opens full screen, and Safari won’t clear its data on its own.':'In your browser’s menu, choose <b>Install app</b> or <b>Add to Home screen</b>. It opens full screen and keeps your data safer from automatic cleanup.'}</p>${installEvt&&!standalone()?'<div class="actions"><button class="btn sm" data-act="install">Install</button></div>':''}</div>
- <div class="card"><h3>Start over</h3><p class="sub">Erase everything on this device and go back to the sample budget.${edited&&backupDue()?' <span class="warnline">Back up first: you don’t have a recent backup.</span>':''}</p>
+ <div class="card"><h3>Put it on your home screen</h3><p class="sub">${standalone()?'<span class="okline">✓ You’re using the home-screen app.</span>':installEvt?'Opens full screen and protects your data.':iOS?'Safari → Share → <b>Add to Home Screen</b>.':'Browser menu → <b>Install app</b>.'}</p>${installEvt&&!standalone()?'<div class="actions"><button class="btn sm" data-act="install">Install</button></div>':''}</div>
+ <div class="card"><h3>Start over</h3><p class="sub">Erase everything and go back to the example.${edited&&backupDue()?' <span class="warnline">Back up first.</span>':''}</p>
   <div class="actions"><button class="btn sm danger" data-act="menuReset">${resetArm?'Tap again to erase everything':'Reset to sample budget'}</button></div></div>`}
 function vPile(){const st=monthStats(month),sm=k=>st.tx.filter(x=>x.k===k).reduce((s,x)=>s+x.amt,0),up=Array.isArray(S.tx[month])&&S.tx[month].length;
  return `${head('Checking account')}<h2>Woodpile &amp; stove</h2><p class="where">Each log is ${fmt(unit)}. Paychecks stack wood; every purchase goes in the stove.</p>
  <div class="big"><b>${st.end<0?'−':''}${fmt(Math.abs(st.end))}</b><span class="pill ${st.end<0?'over':'ok'}">at the end of ${MONTHS[month]}</span></div>
  <div class="legend" style="margin-top:12px">${[['Opening balance',st.open],['Paychecks &amp; deposits',sm('in')],['Spent',-sm('out')],['Moved to savings',-sm('save')]].map(([l,v])=>`<div class="lg" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><span>${l}</span><b>${v<0?'−':''}${fmt(Math.abs(v))}</b></div>`).join('')}</div>
- <p class="note">${up?`Playing ${S.tx[month].length} uploaded transactions.`:'Playing sample transactions built from this month’s budget. Upload your bank export in Budget → Upload to watch your real month.'}</p>
+ <p class="note">${up?`Playing ${S.tx[month].length} uploaded transactions.`:'Playing example transactions. Upload statements to see your real month.'}</p>
  <div class="actions"><button class="btn sm" data-act="play">▶ Play ${MONTHS[month]}</button></div>`}
 let sortRemember=true,sortNew=null;
 function groupsFor(m){const g={};for(const t of S.tx[m]||[]){if(t.k==='xfer'&&!String(t.key).startsWith('TRANSFER TO'))continue;const id=t.key;(g[id]=g[id]||{key:id,tx:[],k:t.k,bill:t.bill,goal:t.goal,hint:t.hint,how:t.how}).tx.push(t)}
@@ -1061,10 +1061,10 @@ function sortRow(x){const n=x.tx.length,days=[...new Set(x.tx.map(t=>t.d))].slic
    <label class="f" style="grid-column:1 / -1">Lives in<select id="nb-spot">${fs.map(id=>`<option value="${id}">${esc(SPOTS[id].room)} · ${esc(SPOTS[id].label)}</option>`).join('')}<option value="">Not in the house yet</option></select></label>
    <div class="actions" style="grid-column:1 / -1;margin-top:4px"><button class="btn sm" data-act="newBillFor" data-key="${esc(x.key)}">Add category and sort</button><button class="btn sm ghost" data-act="cancelNew">Cancel</button></div>`:''}</div>`}
 function vSort(){const gs=groupsFor(month),need=gs.filter(x=>x.k==='out'&&!x.bill),xf=gs.filter(x=>x.k==='xfer'),auto=gs.filter(x=>!(x.k==='out'&&!x.bill)&&x.k!=='xfer');
- return `<p class="sub" style="margin-top:12px">Pick where each merchant’s spending belongs. Every purchase from that merchant this month moves together.</p>
+ return `<p class="sub" style="margin-top:12px">Choose where each merchant belongs.</p>
  <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-size:15px"><input type="checkbox" id="sortRemember" ${sortRemember?'checked':''} style="width:20px;height:20px"> Remember my choices for future uploads</label>
  <h3>Needs sorting ${need.length?`(${need.length})`:''}</h3>${need.length?need.map(sortRow).join(''):'<p class="sub">All sorted. Nice.</p>'}
- ${xf.length?`<h3>Moved between your accounts (${xf.length})</h3><p class="sub">These left one of your accounts and arrived in another, so they’re ignored. If one is really savings, send it to a garden row or the water tower.</p>${xf.map(sortRow).join('')}`:''}
+ ${xf.length?`<h3>Moved between your accounts (${xf.length})</h3><p class="sub">Moved between your accounts, so they’re ignored. Send real savings to a garden row.</p>${xf.map(sortRow).join('')}`:''}
  ${auto.length?`<details class="edit"><summary>Matched automatically (${auto.length})</summary>${auto.map(sortRow).join('')}</details>`:''}
  ${need.length?'':'<div class="actions"><button class="btn sm" data-act="play">▶ Play '+MONTHS[month]+'</button></div>'}`}
 function sortAssign(key,val,extraBill){const m=month,rule=val.startsWith('b:')?{t:'bill',id:val.slice(2)}:val.startsWith('g:')?{t:'goal',g:val.slice(2)}:val==='i:income'?{t:'income'}:{t:'ignore'};
@@ -1083,10 +1083,10 @@ function vBudget(){const hasTx=Array.isArray(S.tx[month])&&S.tx[month].length;if
   <div class="legend"><h3 style="margin:10px 0 2px">Bills</h3>${items.map(row).join('')}<h3 style="margin:14px 0 2px">Savings</h3>${sav.map(row).join('')}
   <div class="lg" style="cursor:default"><span class="d" style="background:repeating-linear-gradient(45deg,#f1ecf6,#f1ecf6 3px,#d9d0e6 3px,#d9d0e6 6px)"></span><span>Left over</span><b>${left<0?'−':''}${fmt(Math.abs(left))}</b><em>${inc?(left/inc*100).toFixed(1):'0.0'}%</em></div></div>`}
  else if(budgetTab==='edit'){
-  body=`<p class="sub" style="margin-top:12px">Changes save in this browser and update the house right away. “Spent” is for ${MONTHS[month]}; switch months at the top to edit the others.</p>
+  body=`<p class="sub" style="margin-top:12px">Saves as you type. “Spent” is for ${MONTHS[month]}.</p>
   <div class="grid2" style="margin-top:12px"><label class="f">Take-home pay in ${MONTHS[month]}<input type="number" inputmode="decimal" data-ed="income" value="${S.income[month]}"></label>
   <label class="f">Apply pay to<select data-ed="incomeAll"><option value="one">This month only</option><option value="all">All months</option></select></label></div>
-  <h3>Categories</h3><p class="sub">Set categories are the same for every budget; custom ones are yours. Choosing a set category that’s already in use combines the two.</p>${S.bills.map((b,i)=>`<div class="erow">
+  <h3>Categories</h3><p class="sub">Picking a category that’s already used combines the two.</p>${S.bills.map((b,i)=>`<div class="erow">
    <label class="f nm">Name<input type="text" data-ed="name" data-i="${i}" value="${esc(b.name)}"></label>
    <label class="f">Budget<input type="number" inputmode="decimal" data-ed="budget" data-i="${i}" value="${b.budget}"></label>
    <label class="f">Spent<input type="number" inputmode="decimal" data-ed="spent" data-i="${i}" value="${b.a[month]}"></label>
@@ -1098,16 +1098,16 @@ function vBudget(){const hasTx=Array.isArray(S.tx[month])&&S.tx[month].length;if
    <label class="f">Target / mo<input type="number" inputmode="decimal" data-ed="gtarget" data-g="${i}" value="${g.target}"></label>
    <label class="f">Saved<input type="number" inputmode="decimal" data-ed="gsaved" data-g="${i}" value="${g.a[month]}"></label>${i?`<button class="del" data-act="delGoal" data-g="${i}" aria-label="Remove ${esc(g.name)}">×</button>`:'<span></span>'}
    <div class="wide grid2"><label class="f">Goal total<input type="number" inputmode="decimal" data-ed="ggoal" data-g="${i}" value="${g.goal}"></label><label class="f">Bank account<input type="text" data-ed="gacct" data-g="${i}" value="${esc(g.account||'')}" placeholder="e.g. Ally savings ••1234"></label></div></div>`).join('')}
-  <p class="sub" style="margin-top:10px">When you upload transactions, transfers to a row’s bank account (matched by its name or last four digits) fill that row.</p>
+  <p class="sub" style="margin-top:10px">Transfers to a row’s bank account (name or last 4 digits) fill that row.</p>
   <div class="actions">${S.goals.length<6?'<button class="btn sm ghost" data-act="addGoal">+ Add garden row</button>':''}<button class="btn sm danger" data-act="reset">Reset to sample budget</button></div>`}
  else if(budgetTab==='sort')body=vSort();
- else{body=`<p class="sub" style="margin-top:12px"><b>Bank transactions</b> (date, description, amount): the month plays back day by day and each purchase lands on a matching object (Safeway → fridge, Shell → gas can, Netflix → TV). <b>A budget</b> (name, category, budget, spent) replaces your categories instead: each line is matched to a set category, and anything that doesn’t fit becomes a custom category you place in the house.</p><p class="sub">Works with CSV, Excel (any sheet layout with names and amounts), PDF bank statements, OFX/QFX downloads (the “Quicken” or “Money” export most banks offer) and JSON. Files are read on this device and never uploaded.</p>
-  <label class="drop" id="drop" style="margin-top:12px"><b style="color:var(--ink)">Choose a file</b><span>or drop it here · CSV, Excel, PDF statement, OFX/QFX or JSON</span><input type="file" id="file" accept=".csv,.json,.xlsx,.xls,.xlsm,.ods,.pdf,.ofx,.qfx,.qbo,text/csv,application/json,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="position:absolute;opacity:0;width:1px;height:1px"></label>
-  ${uploadMsg?`<p class="msg">${uploadMsg}</p>`:''}${homelessHTML()}
-  <p class="sub" style="margin-top:10px">Transactions look like <code>2026-11-03,SAFEWAY #1542,-84.12</code>: deposits positive, spending negative. Separate debit and credit columns work too, and transfers mentioning savings or a goal’s name fill that goal.</p>
-  <h3>Budget CSV format</h3><p class="sub">Lines with “savings”, “retirement”, “401k”, “IRA” or “investment” in the name become garden rows, and an “emergency fund” line fills the water tower. Total lines and blank amounts are skipped.</p><p class="sub">Columns: <b>name, category, budget, spent</b>. Add a row named “Take-home pay” for income, and rows with category “Savings” for the water tower (“Emergency fund”) and the four garden rows. Here’s your current budget in that format:</p>
-  <textarea id="tpl" readonly aria-label="Current budget as CSV">${esc(toCSV())}</textarea>
-  <div class="actions"><button class="btn sm ghost" data-act="copyCsv">Copy current budget as CSV</button></div>`}
+ else{const dz=(id,t,sub,acc,multi)=>`<label class="drop" id="drop-${id}" style="margin-top:10px"><b style="color:var(--ink)">${t}</b><span>${sub}</span><input type="file" id="file-${id}" ${multi?'multiple':''} accept="${acc}" style="position:absolute;opacity:0;width:1px;height:1px"></label>`;
+  body=`${uploadMsg?`<p class="msg">${uploadMsg}</p>`:''}${homelessHTML()}
+  <div class="card"><h3>Budget</h3><p class="sub">Your monthly bills and savings. Replaces your categories.</p>${dz('b','Choose budget','Excel, CSV or PDF','.csv,.json,.xlsx,.xls,.xlsm,.ods,.pdf,text/csv,application/json,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel',0)}</div>
+  <div class="card"><h3>Transactions</h3><p class="sub">One month of statements. Pick every account at once so transfers between them cancel out.</p>${dz('t','Choose statements','PDF, CSV, Excel or OFX/QFX · several at once','.csv,.xlsx,.xls,.xlsm,.ods,.pdf,.ofx,.qfx,.qbo,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel',1)}</div>
+  <p class="sub" style="margin-top:12px">Files are read on this device and never uploaded.</p>
+  <details class="edit"><summary>File formats</summary><p class="sub">Budget: a name and amount on each line. “Take-home pay” sets income; savings, retirement and IRA lines become garden rows; “emergency fund” fills the tower.</p><p class="sub" style="margin-top:8px">Transactions: date, description, amount (spending negative), or separate debit and credit columns.</p>
+   <textarea id="tpl" readonly aria-label="Current budget as CSV">${esc(toCSV())}</textarea><div class="actions"><button class="btn sm ghost" data-act="copyCsv">Copy budget as CSV</button></div></details>`}
  return `${head(MONTHS[month]+' 2026')}<h2>Budget</h2><div class="tabs" role="tablist">${tabs}</div>${body}`}
 function render(){if(!view)return;let html='';
  if(view.t==='bill'){const b=billById(view.id);if(!b)return close();html=vBill(b)}
@@ -1121,9 +1121,9 @@ function render(){if(!view)return;let html='';
  const st=sheet.scrollTop;sheet.innerHTML=html;sheet.classList.toggle('wide',['budget','menu','catalog','start'].includes(view.t));if(view.keep)sheet.scrollTop=st;else sheet.scrollTop=0;view.keep=false;
  sheet.classList.add('open');document.body.classList.add('sheet-open');
  const rf=document.getElementById('rs-file');if(rf)rf.addEventListener('change',()=>{const file=rf.files[0];if(file)file.text().then(txt=>pickBackup(txt,file.name)).catch(()=>{menuMsg='<span class="warnline">That file couldn’t be read.</span>';render()})});
- const f=document.getElementById('file');if(f){f.addEventListener('change',()=>f.files[0]&&readFile(f.files[0]));const d=document.getElementById('drop');
-  ['dragenter','dragover'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add('on')}));['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('on')}));
-  d.addEventListener('drop',e=>{const file=e.dataTransfer.files[0];if(file)readFile(file)})}}
+ for(const [fid,did,go] of [['file-b','drop-b',fl=>fl[0]&&readBudget(fl[0])],['file-t','drop-t',fl=>readTxFiles(fl)]]){const f=document.getElementById(fid),d=document.getElementById(did);if(!f||!d)continue;
+  f.addEventListener('change',()=>go(f.files));['dragenter','dragover'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add('on')}));
+  ['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('on')}));d.addEventListener('drop',e=>go(e.dataTransfer.files))}}
 function open(v){view=v;render()}
 function close(){sheet.classList.remove('open');document.body.classList.remove('sheet-open');view=null;selected=null;flyTo(null)}
 function select(id){const h=byId[id];if(!h)return;if(h.kind==='hoe')return hoeAddRow();selected=h;
@@ -1156,7 +1156,7 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
   if(p1.length<6){menuMsg='<span class="warnline">Choose a passcode with at least 6 characters.</span>';view.keep=true;return render()}
   if(p1!==p2){menuMsg='<span class="warnline">The two passcodes don’t match.</span>';view.keep=true;return render()}
   t.disabled=true;t.textContent='Locking…';
-  makeBackup(p1).then(txt=>deliverFile(txt,`cozy-budget-backup-${new Date().toISOString().slice(0,10)}.json`)).then(ok=>{if(ok){meta.lastBackup=new Date().toISOString();saveMeta();updateMenuDot();askPersist();menuMsg='<span class="okline">✓ Backup saved.</span> Keep the file and your passcode somewhere safe.'}else menuMsg='Backup cancelled.';view.keep=true;render()})
+  makeBackup(p1).then(txt=>deliverFile(txt,`cozy-budget-backup-${new Date().toISOString().slice(0,10)}.json`)).then(ok=>{if(ok){meta.lastBackup=new Date().toISOString();saveMeta();updateMenuDot();askPersist();menuMsg='<span class="okline">✓ Backup saved.</span>'}else menuMsg='Backup cancelled.';view.keep=true;render()})
    .catch(()=>{menuMsg='<span class="warnline">The backup couldn’t be made in this browser.</span>';view.keep=true;render()});return}
  if(a==='restoreOpen'&&restoreFile){t.disabled=true;t.textContent='Opening…';openBackup(restoreFile.data,v('rs-pass').value).then(p=>{if(!p||!validState(p.state))throw{msg:'That backup file looks damaged.'};restoreReady=p;menuMsg='';view.keep=true;render()})
    .catch(err=>{menuMsg=`<span class="warnline">${err&&err.msg?err.msg:'That backup couldn’t be opened.'}</span>`;view.keep=true;render()});return}
@@ -1165,6 +1165,8 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
  if(a==='goBudget'){menuMsg='';budgetTab=t.dataset.to;return open({t:'budget'})}
  if(a==='install'&&installEvt){installEvt.prompt();installEvt.userChoice.finally(()=>{installEvt=null;view.keep=true;render()});return}
  if(a==='menuReset'){if(!resetArm){resetArm=true;view.keep=true;return render()}resetArm=false;if(anim)stopAnim();S=clone(SAMPLE);S.rules={};edited=false;buildGarden();try{localStorage.removeItem(KEY)}catch(err){}applyMonth(false);updateMenuDot();menuMsg='Back to the sample budget.';view.keep=true;return render()}
+ if(a==='txImport'&&pendingTx){const p=pendingTx;pendingTx=null;try{finishTx(p.raw,p.n)}catch(err){uploadMsg='Those transactions couldn’t be imported.';render()}return}
+ if(a==='txCancel'){pendingTx=null;uploadMsg='';view.keep=true;return render()}
  if(a==='pdfImport'&&pendingPDF){const p=pendingPDF;pendingPDF=null;try{importText(null,p.nm,p.rows)}catch(err){uploadMsg='Those transactions couldn’t be imported.';render()}return}
  if(a==='pdfCancel'){pendingPDF=null;uploadMsg='';view.keep=true;return render()}
  if(a==='addSetHere'){const c=t.dataset.cat;if(billOfCat(c))return;const amt=num(v('h-budget').value);const b={id:uid(),name:SETBY[c].name,cat:c,budget:amt,a:[amt,amt,amt],due:'',note:'',spot:null};S.bills.push(b);assign(b,t.dataset.spot);save(true);applyMonth(false);open({t:'bill',id:b.id})}
@@ -1276,22 +1278,10 @@ function pdfStatementRows(pages,fullText){
  return {rows,checked,agree,from:ds[0],to:ds[ds.length-1],accounts:accounts.size,credit}}
 
 let pendingPDF=null;
-async function readPDF(buf,nm){await lib('pdf');const pj=window.pdfjsLib;pj.GlobalWorkerOptions.workerSrc=LIBS.pdfWorker;
+async function pdfPages(buf){await lib('pdf');const pj=window.pdfjsLib;pj.GlobalWorkerOptions.workerSrc=LIBS.pdfWorker;
  const doc=await pj.getDocument({data:new Uint8Array(buf)}).promise;const pages=[];let full='';
  for(let p=1;p<=doc.numPages;p++){const tc=await (await doc.getPage(p)).getTextContent();pages.push(tc.items.map(i=>({s:i.str,x:i.transform[4],y:i.transform[5],w:i.width})));full+=tc.items.map(i=>i.str).join(' ')+'\n'}
- if(!full.replace(/\s/g,'').length)throw{msg:'That PDF is a scanned picture with no text inside, so it can’t be read. Download the statement from your bank’s website instead, or use its CSV or OFX/QFX export.'};
- const r=pdfStatementRows(pages,full);
- if(r.rows.length<3){/* not a statement: maybe a budget saved as PDF (each page like a sheet; the first one that has a budget is used) */
-  const good=pages.map((p,i)=>pdfBudgetRows(p)?i:-1).filter(i=>i>=0);
-  if(good.length){lastPDF={nm,pages,good};return importPdfPage(good[0])}
-  throw{msg:'No budget lines or bank transactions were found in that PDF. A budget needs a name and an amount on each line; for a bank statement, try its CSV or OFX/QFX download instead.'}}
- pendingPDF={nm,rows:[['date','description','amount'],...r.rows]};
- const tin=r.rows.reduce((t,x)=>t+Math.max(0,+x[2]),0),tout=r.rows.reduce((t,x)=>t+Math.max(0,-x[2]),0);
- const check=r.checked?(r.agree===r.checked?`<br>✓ Every line matches the statement’s running balance, so the amounts and signs are right.`:`<br><b>${r.checked-r.agree} of ${r.checked} lines don’t match the statement’s running balance</b>, so some amounts may be off. Look them over below.`):'<br>This statement has no running balance to check against, so look over the amounts below.';
- uploadMsg=`<b>Found ${r.rows.length} transactions</b> in ${esc(nm)}, ${dayLabel(r.from)} to ${dayLabel(r.to)}${r.accounts>1?` across ${r.accounts} accounts`:''}: ${money2(tin)} in, ${money2(tout)} out.${r.credit?' This looks like a credit card statement, so charges count as spending.':''}${check}
-  <span style="display:block;max-height:190px;overflow:auto;margin:10px 0;background:#fff;border-radius:10px;padding:6px 10px;font-size:13px">${r.rows.map(x=>`<span style="display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:8px;padding:3px 0;border-bottom:1px solid #f1ecf6"><span>${dayLabel(x[0])}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x[1])}</span><b style="color:${+x[2]<0?'var(--ink)':'#2f9a62'}">${+x[2]<0?'−':'+'}${money2(+x[2])}</b></span>`).join('')}</span>
-  <span class="actions" style="display:flex;margin:0"><button class="btn sm" data-act="pdfImport">Import these</button><button class="btn sm ghost" data-act="pdfCancel">Cancel</button></span>`;
- render()}
+ if(!full.replace(/\s/g,'').length)throw{msg:'That PDF is a scanned picture with no text in it. Download it from your bank’s website, or use CSV or OFX/QFX.'};return {pages,full}}
 function ofxRows(t){const ent=x=>x.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&apos;/g,"'").replace(/&quot;/g,'"');const rows=[['date','description','amount']];
  for(const blk of t.split(/<STMTTRN>/i).slice(1)){const g=k=>{const m=new RegExp('<'+k+'>([^<\\r\\n]*)','i').exec(blk);return m?ent(m[1].trim()):''};const d=g('DTPOSTED'),amt=g('TRNAMT');if(!/^\d{8}/.test(d)||amt==='')continue;
   rows.push([`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`,[g('NAME'),g('MEMO')].filter((x,i,a)=>x&&a.indexOf(x)===i).join(' ')||g('TRNTYPE')||'Transaction',amt.replace(',','.')])}
@@ -1342,15 +1332,41 @@ function importSheet(name){const ws=lastWB.wb.Sheets[name],p2=v=>String(v).padSt
  if(!t)throw{msg:`Couldn’t find a budget or transactions on the “${esc(name)}” sheet.`+sheetPicker(name)};
  importText(null,lastWB.nm,t);if(lastWB.wb.SheetNames.length>1){uploadMsg+=sheetPicker(name);render()}}
 const sheetPicker=cur=>lastWB&&lastWB.wb.SheetNames.length>1?`<label class="f" style="margin-top:10px">Sheet used from ${esc(lastWB.nm)}<select data-sheet="1">${lastWB.wb.SheetNames.map(n=>`<option ${n===cur?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`:'';
-async function readFile(file){const nm=file.name||'file';pendingPDF=null;uploadMsg=`Reading ${esc(nm)}…`;budgetTab='upload';view={t:'budget'};render();
- try{const buf=await file.arrayBuffer(),head=new TextDecoder().decode(buf.slice(0,5));
-  if(/\.pdf$/i.test(nm)||head.startsWith('%PDF'))return await readPDF(buf,nm);
-  if(/\.(xlsx|xlsm|xlsb|xls|ods|numbers)$/i.test(nm)||head.startsWith('PK'))return await readXLSX(buf,nm);
+const headOf=rows=>{const h=(rows[0]||[]).map(x=>String(x).toLowerCase());return {h,hasHead:h.some(x=>/name|item|category|budget|amount|spent|actual|date|desc/.test(x))}};
+const isTxTable=rows=>{const {h,hasHead}=headOf(rows);return (hasHead&&h.some(x=>/date|posted/.test(x)))||(!hasHead&&!!parseDay((rows[0]||[])[0]))};
+const sniff=(nm,buf)=>{const head=new TextDecoder().decode(buf.slice(0,5));return /\.pdf$/i.test(nm)||head.startsWith('%PDF')?'pdf':/\.(xlsx|xlsm|xlsb|xls|ods|numbers)$/i.test(nm)||head.startsWith('PK')?'xlsx':'text'};
+async function sheetGrids(buf){await lib('xlsx');const wb=XLSX.read(buf,{type:'array',cellDates:true}),p2=v=>String(v).padStart(2,'0');
+ const cell=v=>v==null?'':v instanceof Date?`${v.getFullYear()}-${p2(v.getMonth()+1)}-${p2(v.getDate())}`:typeof v==='number'?String(Math.round(v*100)/100):String(v);
+ return {wb,grid:n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:null,blankrows:false}).map(r=>(r||[]).map(cell))}}
+/* Budget upload: one file */
+async function readBudget(file){const nm=file.name||'file';pendingPDF=null;uploadMsg=`Reading ${esc(nm)}…`;budgetTab='upload';view={t:'budget'};render();
+ try{const buf=await file.arrayBuffer(),kind=sniff(nm,buf);
+  if(kind==='pdf'){const {pages}=await pdfPages(buf),good=pages.map((p,i)=>pdfBudgetRows(p)?i:-1).filter(i=>i>=0);if(!good.length)throw{msg:'No budget found in that PDF. Each line needs a name and an amount.'};lastPDF={nm,pages,good};return importPdfPage(good[0])}
+  if(kind==='xlsx')return await readXLSX(buf,nm);
   const text=new TextDecoder().decode(buf);
   if(/"app"\s*:\s*"cozy-budget-backup"/.test(text.slice(0,300))){pickBackup(text,nm);return}
-  if(/\.(ofx|qfx|qbo)$/i.test(nm)||/OFXHEADER|<OFX>/i.test(text.slice(0,3000)))return importText(null,nm,ofxRows(text));
+  if(!/\.json$/i.test(nm)&&!/^\s*[\[{]/.test(text)&&isTxTable(parseCSV(text)))throw{msg:'That looks like transactions. Use the Transactions upload instead.'};
   importText(text,nm)}
- catch(err){uploadMsg=err&&err.msg?err.msg:'That file couldn’t be read. Check that it’s a bank statement or a budget with a name and an amount on each row.';budgetTab='upload';render()}}
+ catch(err){uploadMsg=err&&err.msg?err.msg:'That file couldn’t be read. Each line needs a name and an amount.';render()}}
+/* Transactions upload: one or more statements, matched together so transfers between your accounts cancel out */
+let pendingTx=null;
+async function readTxFiles(files){files=[...files];if(!files.length)return;pendingPDF=null;pendingTx=null;uploadMsg=`Reading ${files.length>1?files.length+' files':esc(files[0].name)}…`;budgetTab='upload';view={t:'budget'};render();
+ const raw=[],notes=[],bad=[];let pdf=false;
+ for(let i=0;i<files.length;i++){const f=files[i],nm=f.name||'file';
+  try{const buf=await f.arrayBuffer(),kind=sniff(nm,buf);let rows=null,check='';
+   if(kind==='pdf'){pdf=true;const {pages,full}=await pdfPages(buf),r=pdfStatementRows(pages,full);if(!r.rows.length)throw{msg:'no transactions found'};
+    rows=[['date','description','amount'],...r.rows];check=r.checked?(r.agree===r.checked?' ✓':` (${r.checked-r.agree} lines don’t match its balance)`):''}
+   else if(kind==='xlsx'){const {wb,grid}=await sheetGrids(buf);for(const n of wb.SheetNames){const t=tableFromGrid(grid(n));if(t&&isTxTable(t)){rows=t;break}}if(!rows)throw{msg:'no transactions found'}}
+   else{const text=new TextDecoder().decode(buf);rows=/\.(ofx|qfx|qbo)$/i.test(nm)||/OFXHEADER|<OFX>/i.test(text.slice(0,3000))?ofxRows(text):parseCSV(text);if(!isTxTable(rows))throw{msg:'looks like a budget, not transactions'}}
+   const {h,hasHead}=headOf(rows),got=txRaw(rows,hasHead,h,i);if(!got.length)throw{msg:'no transactions found'};raw.push(...got);notes.push(`${esc(nm)}: ${got.length}${check}`)}
+  catch(err){bad.push(`${esc(nm)}: ${err&&err.msg?err.msg:'couldn’t be read'}`)}}
+ if(!raw.length){uploadMsg=bad.join('<br>')||'No transactions found.';return render()}
+ const tin=raw.reduce((t,x)=>t+Math.max(0,x.v),0),tout=raw.reduce((t,x)=>t+Math.max(0,-x.v),0),d=raw.map(x=>x.dt).sort((a,b)=>a-b),dl=t=>new Date(t).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
+ const sum=`<b>${raw.length} transactions</b>, ${dl(d[0])}–${dl(d[d.length-1])} · ${money2(tin)} in, ${money2(tout)} out${files.length>1||pdf?`<br><span style="font-size:13px">${notes.join(' · ')}</span>`:''}${bad.length?`<br><span class="warnline" style="font-size:13px">Skipped ${bad.join(' · ')}</span>`:''}`;
+ if(!pdf){try{finishTx(raw,files.length);if(bad.length){uploadMsg+=`<br><span class="warnline">Skipped ${bad.join(' · ')}</span>`;render()}}catch(e){uploadMsg='Those transactions couldn’t be imported.';render()}return}
+ pendingTx={raw,n:files.length};
+ uploadMsg=`${sum}<span style="display:block;max-height:180px;overflow:auto;margin:10px 0;background:#fff;border-radius:10px;padding:6px 10px;font-size:13px">${raw.slice().sort((a,b)=>a.dt-b.dt).map(x=>`<span style="display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:8px;padding:3px 0;border-bottom:1px solid #f1ecf6"><span>${dl(x.dt)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.desc)}</span><b style="color:${x.v<0?'var(--ink)':'#2f9a62'}">${x.v<0?'−':'+'}${money2(x.v)}</b></span>`).join('')}</span>
+  <span class="actions" style="display:flex;margin:0"><button class="btn sm" data-act="txImport">Import</button><button class="btn sm ghost" data-act="txCancel">Cancel</button></span>`;render()}
 function parseDay(s){s=String(s||'').trim();let m=/^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);if(m)return{y:+m[1],mo:+m[2],d:+m[3]};m=/^(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](\d{2,4}))?$/.exec(s);if(m)return{y:m[3]?(+m[3]<100?2000+ +m[3]:+m[3]):2026,mo:+m[1],d:+m[2]};
  if(/[a-z]/i.test(s)&&/\d/.test(s)){const t=Date.parse(s);if(!isNaN(t)){const D=new Date(t);return{y:D.getFullYear(),mo:D.getMonth()+1,d:D.getDate()}}}return null}
 /* Transactions → categories. In order: (1) choices you saved, (2) a category column (a bank's category or a Plaid code), (3) a distinctive word
@@ -1394,30 +1410,35 @@ function recompute(m){const tx=S.tx[m];if(!Array.isArray(tx))return;
  const r2=v=>Math.round(v*100)/100;S.bills.forEach(b=>b.a[m]=r2(b.a[m]));S.tank.a[m]=r2(S.tank.a[m]);S.goals.forEach(g=>g.a[m]=r2(g.a[m]));S.income[m]=Math.round(inc)}
 const unsortedOf=m=>(Array.isArray(S.tx[m])?S.tx[m]:[]).filter(t=>t.k==='out'&&!t.bill);
 const unsortedSum=m=>unsortedOf(m).reduce((s,t)=>s+t.amt,0);
-function importTx(rows,hasHead,h){const col=(re,d)=>hasHead?h.findIndex(x=>re.test(x)):d;
+function txRaw(rows,hasHead,h,src=0){const col=(re,d)=>hasHead?h.findIndex(x=>re.test(x)):d;
  const di=col(/date|posted/,0),de=col(/desc|payee|merchant|memo|details|^name$/,1),am=col(/amount|amt/,2),dr=col(/debit|withdraw/,-1),cr=col(/credit|deposit/,-1),ca=col(/categ/,-1);
  const raw=[];
  for(const r of rows.slice(hasHead?1:0)){const dd=parseDay(r[di]);if(!dd)continue;let v=NaN;
   if(am>=0&&r[am]!=null&&r[am]!==''){let t=String(r[am]).replace(/[$,\s]/g,'');if(/^\(.*\)$/.test(t))t='-'+t.slice(1,-1);v=parseFloat(t)}
   else if(dr>=0||cr>=0)v=(cr>=0?num(r[cr]):0)-(dr>=0?Math.abs(num(r[dr])):0);
-  if(!isFinite(v)||v===0)continue;raw.push({dt:Date.UTC(dd.y,dd.mo-1,dd.d),mo:dd.mo,desc:String((de>=0&&r[de])||'Transaction').replace(/\s+/g,' ').trim().slice(0,90),cat:ca>=0?String(r[ca]||'').trim():'',v:Math.round(v*100)/100})}
- if(!raw.length)throw 0;
+  if(!isFinite(v)||v===0)continue;raw.push({dt:Date.UTC(dd.y,dd.mo-1,dd.d),mo:dd.mo,desc:String((de>=0&&r[de])||'Transaction').replace(/\s+/g,' ').trim().slice(0,90),cat:ca>=0?String(r[ca]||'').trim():'',v:Math.round(v*100)/100,src})}
+ return raw}
+function importTx(rows,hasHead,h){return finishTx(txRaw(rows,hasHead,h,0),1)}
+/* a payment between two of your accounts shows up once in each file: card "Payment, thank you" ↔ checking "Autopay" */
+const PAYLIKE=/payment|autopay|auto pay|pmt|thank you|e-?pay|transfer|xfer|deposit from|withdrawal to|online banking/i;
+function finishTx(raw,files){if(!raw.length)throw 0;
  /* which month: a statement cycle (≤35 days) counts as one month even if it crosses into the next */
  const t0=Math.min(...raw.map(x=>x.dt)),t1=Math.max(...raw.map(x=>x.dt)),cyc=(t1-t0)/864e5<=35,cnt={};raw.forEach(x=>cnt[x.mo]=(cnt[x.mo]||0)+1);
  const topMo=+Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0],idx={9:0,10:1,11:2}[topMo],m=idx!=null?idx:month;
  const list=cyc?raw:raw.filter(x=>x.mo===topMo),base=cyc?t0:Math.min(...list.map(x=>x.dt));
- const tx=list.map(x=>({d:clamp(Math.round((x.dt-base)/864e5)+1,1,DAYS[m]),desc:x.desc,cat:x.cat,amt:Math.abs(x.v),v:x.v,key:mkey(x.desc),k:x.v>0?'in':'out'}));
+ const tx=list.map(x=>({d:clamp(Math.round((x.dt-base)/864e5)+1,1,DAYS[m]),desc:x.desc,cat:x.cat,amt:Math.abs(x.v),v:x.v,src:x.src||0,key:mkey(x.desc),k:x.v>0?'in':'out'}));
  /* money that left one account and arrived in another within 3 days is just moving around: pair it up */
- const outs=tx.filter(t=>t.v<0&&isXfer(t.desc)),ins=tx.filter(t=>t.v>0&&isXfer(t.desc));let pairs=0;
- for(const o of outs){const i=ins.find(i=>i.k!=='xfer'&&Math.abs(i.amt-o.amt)<0.005&&Math.abs(i.d-o.d)<=3);if(i){o.k=i.k='xfer';o.pair=1;i.pair=2;pairs++}}
+ const outs=tx.filter(t=>t.v<0),ins=tx.filter(t=>t.v>0);let pairs=0;
+ const linked=(o,i)=>isXfer(o.desc)&&isXfer(i.desc)||(o.src!==i.src&&(PAYLIKE.test(o.desc)||PAYLIKE.test(i.desc)));
+ for(const o of outs){const i=ins.find(i=>i.k!=='xfer'&&Math.abs(i.amt-o.amt)<0.005&&Math.abs(i.d-o.d)<=3&&linked(o,i));if(i){o.k=i.k='xfer';o.pair=1;i.pair=2;pairs++}}
  const df={},limit=Math.max(4,tx.length*0.1);tx.forEach(t=>new Set(t.desc.toLowerCase().split(/[^a-z&']+/)).forEach(w=>df[w]=(df[w]||0)+1));
  for(const t of tx){if(t.k==='in'){const r=S.rules[t.key];if(r&&r.t==='ignore')t.k='ignore';else if(/payroll|salary|paycheck|direct dep/i.test(t.desc))t.label='Paycheck';continue}
   if(t.k==='xfer'){if(t.pair===1){const r=S.rules[t.key];if(r&&r.t==='goal'){t.k='save';t.goal=r.g;t.how='rule'}else{const g=goalRef(t.desc);if(g){t.k='save';t.goal=g;t.how='account'}}}continue}
   classify(t,df,limit)}
- tx.forEach(t=>{delete t.v;delete t.pair;t.name=t.label||prettyKey(t.key);delete t.label});
+ tx.forEach(t=>{delete t.v;delete t.pair;delete t.src;t.name=t.label||prettyKey(t.key);delete t.label});
  S.tx[m]=tx.sort((a,b)=>a.d-b.d);month=m;recompute(m);save(true);applyMonth(false);
  const c=k=>tx.filter(t=>t.k===k).length,uns=unsortedOf(m).length,matched=tx.filter(t=>t.k==='out'&&t.bill).length;
- uploadMsg=`Loaded <b>${tx.length} transactions</b> into ${MONTHS[m]}: ${c('in')} deposits, ${matched} purchases matched to bills, ${c('save')} savings transfers${pairs?`, ${pairs} transfers between your own accounts set aside`:''}.${uns?` <b>${uns} need${uns===1?'s':''} sorting.</b>`:' Everything was matched.'}`;
+ uploadMsg=`<b>${MONTHS[m]}: ${tx.length} transactions</b>${files>1?` from ${files} files`:''} · ${matched} matched${c('save')?` · ${c('save')} to savings`:''}${pairs?` · ${pairs} transfer${pairs===1?'':'s'} between accounts cancelled out`:''}${uns?` · <b>${uns} to sort</b>`:''}`;
  if(uns){budgetTab='sort';render()}else{budgetTab='upload';render();setTimeout(()=>{if(view&&view.t==='budget'&&budgetTab==='upload')startAnim()},1500)}}
 function sanG(g){return{account:String(g.account||'').slice(0,40),name:String(g.name||'Goal').slice(0,40),goal:num(g.goal),start:num(g.start),target:num(g.target),a:Array.isArray(g.a)&&g.a.length===3?g.a.map(num):[0,0,0]}}
 let catMsg='';
@@ -1446,13 +1467,13 @@ function importText(text,name,rowsIn){let n=0,extra='';catMsg='';
    else bills.push({id:uid(),name:nm,cat:'custom',budget:bud,a:[sp,sp,sp],due:'',note:'',spot:null,lines:[{name:nm,budget:bud}]})}
   if(!bills.length&&!goals.length&&!tank)throw 0;
   S.bills=bills;bills.forEach(placeSet);S.goals=goals;S.tank=tank||{name:'Emergency fund',account:'',goal:1000,start:0,target:0,a:[0,0,0]};S.tx={};
-  if(incRows){S.income=[inc,inc,inc];extra+=` Take-home pay set to ${fmt(inc)}.`}buildGarden();n=bills.length;
+  if(incRows){S.income=[inc,inc,inc];extra+=` Take-home ${fmt(inc)}.`}buildGarden();n=bills.length;
   const sets=bills.filter(b=>b.cat!=='custom'),cust=bills.filter(b=>b.cat==='custom'),lines=sets.reduce((x,b)=>x+b.lines.length,0);
-  catMsg=`<b>${lines} budget line${lines===1?'':'s'}</b> matched ${sets.length} set categor${sets.length===1?'y':'ies'}${sets.some(b=>b.lines.length>1)?' (lines of the same kind were combined)':''}.`+
-   (cust.length?` <b>${cust.length} became custom categor${cust.length===1?'y':'ies'}</b>: ${cust.map(b=>esc(b.name)+(coversOf(b).length?` (collects ${coversOf(b).map(id=>SETBY[id].name.toLowerCase()).join(' and ')})`:'')).join(', ')}. Give ${cust.length===1?'it':'each one'} a spot in the house below, or fold it into a set category.`:' Everything fit a set category.');
-  extra+=` ${goals.length+(tank?1:0)} savings line${goals.length+(tank?1:0)===1?'':'s'} became garden rows${tank?' and the water tower':''}; set each goal’s total in Edit. All three months start with the budgeted amounts.`}
+  catMsg=`<b>Budget loaded:</b> ${lines} line${lines===1?'':'s'} → ${sets.length} categor${sets.length===1?'y':'ies'}.`+
+   (cust.length?` ${cust.length} custom: ${cust.map(b=>esc(b.name)+(coversOf(b).length?` (collects ${coversOf(b).map(id=>SETBY[id].name.toLowerCase()).join(' and ')})`:'')).join(', ')}.`:'');
+  extra+=` ${goals.length+(tank?1:0)} garden row${goals.length+(tank?1:0)===1?'':'s'}${tank?' + tower':''}.`}
  save();applyMonth(false);const unplaced=S.bills.filter(b=>!b.spot).length;
- uploadMsg=catMsg?catMsg+esc(extra):`Loaded <b>${n} categor${n===1?'y':'ies'}</b>${unplaced?`; ${unplaced} need${unplaced===1?'s':''} a spot in the house`:'; every one has a spot in the house'}.${esc(extra)}`;catMsg='';budgetTab='upload';render()}
+ uploadMsg=catMsg?catMsg+esc(extra):`<b>Budget loaded:</b> ${n} categor${n===1?'y':'ies'}.${esc(extra)}`;catMsg='';budgetTab='upload';render()}
 
 /* ---------- Camera moves ---------- */
 const tmp=new THREE.Vector3();
