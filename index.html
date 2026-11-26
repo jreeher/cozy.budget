@@ -260,7 +260,7 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 let S=clone(SAMPLE),edited=false;
 try{const raw=localStorage.getItem(KEY);if(raw){const v=JSON.parse(raw);if(v&&Array.isArray(v.bills)&&v.tank&&Array.isArray(v.goals)&&v.goals.length<=6&&Array.isArray(v.income)){S=v;edited=true}}}catch(e){}
 if(!S.tx||typeof S.tx!=='object')S.tx={};if(!S.rules||typeof S.rules!=='object')S.rules={};if(!(S.open0>=0))S.open0=600;
-function save(keepTx){edited=true;{const me=document.getElementById('months');if(me)me.style.display=''}if(!keepTx&&S.tx)delete S.tx[month];try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(typeof updateMenuDot==='function'){updateMenuDot();if(persisted==null)askPersist()}}
+function save(keepTx){if(!edited){for(let m=0;m<3;m++)if(m!==month&&typeof clearMonth==='function')clearMonth(m)}edited=true;{const me=document.getElementById('months');if(me)me.style.display=''}if(!keepTx&&S.tx)delete S.tx[month];try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(typeof updateMenuDot==='function'){updateMenuDot();if(persisted==null)askPersist()}}
 const SLOTS=10;
 let month=2;
 const num=v=>{const n=parseFloat(String(v).replace(/[$,\s]/g,''));return isFinite(n)?Math.max(0,n):0};
@@ -739,6 +739,8 @@ function genTx(m){const tx=[],inc=S.income[m]||0;
  S.goals.forEach((g,i)=>{if(g.a[m]>0)tx.push({d:16,desc:'Transfer to '+g.name,amt:g.a[m],k:'save',goal:'goal'+i})});
  return tx.sort((a,b)=>a.d-b.d)}
 const txFor=m=>Array.isArray(S.tx[m])&&S.tx[m].length?S.tx[m].filter(t=>t.k==='in'||t.k==='out'||t.k==='save'):edited?[]:genTx(m);
+/* empty one month: spending, savings deposits, income and its statements (budgets and categories stay) */
+let clearArm=false;function clearMonth(m){S.bills.forEach(b=>b.a[m]=0);S.goals.forEach(g=>g.a[m]=0);S.tank.a[m]=0;S.income[m]=0;delete S.tx[m]}
 const blankState=()=>({income:[0,0,0],open0:0,tx:{},bills:[],tank:{name:'Emergency fund',account:'',goal:1000,start:0,target:0,a:[0,0,0]},goals:[],rules:{},layout:(S&&S.layout)||{hidden:[],moved:{},added:[]}});
 function opening(m){let o=S.open0||0;for(let k=0;k<m;k++)o+=txFor(k).reduce((s,x)=>s+(x.k==='in'?x.amt:-x.amt),0);return o}
 function niceUnit(mx){const raw=Math.max(25,mx/(logs.length*0.92));return [25,50,100,150,200,250,500,1000,2000,5000].find(s=>s>=raw)||Math.ceil(raw/1000)*1000}
@@ -1101,7 +1103,8 @@ function vBudget(){const hasTx=Array.isArray(S.tx[month])&&S.tx[month].length;if
    <label class="f">Saved<input type="number" inputmode="decimal" data-ed="gsaved" data-g="${i}" value="${g.a[month]}"></label>${i?`<button class="del" data-act="delGoal" data-g="${i}" aria-label="Remove ${esc(g.name)}">×</button>`:'<span></span>'}
    <div class="wide grid2"><label class="f">Goal total<input type="number" inputmode="decimal" data-ed="ggoal" data-g="${i}" value="${g.goal}"></label><label class="f">Bank account<input type="text" data-ed="gacct" data-g="${i}" value="${esc(g.account||'')}" placeholder="e.g. Ally savings ••1234"></label></div></div>`).join('')}
   <p class="sub" style="margin-top:10px">Transfers to a row’s bank account (name or last 4 digits) fill that row.</p>
-  <div class="actions">${S.goals.length<6?'<button class="btn sm ghost" data-act="addGoal">+ Add garden row</button>':''}<button class="btn sm danger" data-act="reset">Reset to sample budget</button></div>`}
+  <div class="actions">${S.goals.length<6?'<button class="btn sm ghost" data-act="addGoal">+ Add garden row</button>':''}<button class="btn sm ghost" data-act="clearMonth">${clearArm?'Tap again to clear '+MONTHS[month]:'Clear '+MONTHS[month]}</button><button class="btn sm danger" data-act="reset">Reset to sample budget</button></div>
+  <p class="sub">Clear removes ${MONTHS[month]}’s spending, deposits, income and statements. Budgets stay.</p>`}
  else if(budgetTab==='sort')body=vSort();
  else{const dz=(id,t,sub,acc,multi)=>`<label class="drop" id="drop-${id}" style="margin-top:10px"><b style="color:var(--ink)">${t}</b><span>${sub}</span><input type="file" id="file-${id}" ${multi?'multiple':''} accept="${acc}" style="position:absolute;opacity:0;width:1px;height:1px"></label>`;
   body=`${uploadMsg?`<p class="msg">${uploadMsg}</p>`:''}${homelessHTML()}
@@ -1145,6 +1148,7 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
   sortNew=null;return sortAssign(key,'b:'+b.id)}
  if(a==='catalog')return open({t:'catalog'});
  if(a==='goMenuRestore'){menuMsg='';return open({t:'menu'})}
+ if(a==='clearMonth'){if(!clearArm){clearArm=true;view.keep=true;return render()}clearArm=false;if(anim)stopAnim();clearMonth(month);save(true);buildGarden();applyMonth(false);view.keep=true;return render()}
  if(a==='startBlank'){if(anim)stopAnim();S=blankState();
   save(true);buildGarden();gardener.row=-1;applyMonth(false);uploadMsg='';budgetTab='edit';return open({t:'budget'})}
  if(a==='addObj')return addFromCatalog(t.dataset.type);
