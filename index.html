@@ -1360,7 +1360,12 @@ async function readTxFiles(files){files=[...files];if(!files.length)return;pendi
     rows=[['date','description','amount'],...r.rows];check=r.checked?(r.agree===r.checked?' ✓':` (${r.checked-r.agree} lines don’t match its balance)`):''}
    else if(kind==='xlsx'){const {wb,grid}=await sheetGrids(buf);for(const n of wb.SheetNames){const t=tableFromGrid(grid(n));if(t&&isTxTable(t)){rows=t;break}}if(!rows)throw{msg:'no transactions found'}}
    else{const text=new TextDecoder().decode(buf);rows=/\.(ofx|qfx|qbo)$/i.test(nm)||/OFXHEADER|<OFX>/i.test(text.slice(0,3000))?ofxRows(text):parseCSV(text);if(!isTxTable(rows))throw{msg:'looks like a budget, not transactions'}}
-   const {h,hasHead}=headOf(rows),got=txRaw(rows,hasHead,h,i);if(!got.length)throw{msg:'no transactions found'};raw.push(...got);notes.push(`${esc(nm)}: ${got.length}${check}`)}
+   const {h,hasHead}=headOf(rows);let got=txRaw(rows,hasHead,h,i);if(!got.length)throw{msg:'no transactions found'};
+   /* the same statement picked twice (or one account inside a bigger export): if most of this file is already in, keep only what's new */
+   const dk=x=>`${x.dt}|${x.v.toFixed(2)}|${x.desc.toLowerCase().replace(/[^a-z]/g,'').slice(0,10)}`,have={};raw.forEach(x=>{const k=dk(x);have[k]=(have[k]||0)+1});
+   const left={...have},fresh=got.filter(x=>{const k=dk(x);if(left[k]>0){left[k]--;return false}return true}),dup=got.length-fresh.length;
+   if(dup&&dup>=got.length*0.8){got=fresh;notes.push(`${esc(nm)}: ${fresh.length?fresh.length+' new, ':''}${dup} duplicate${dup===1?'':'s'} skipped`)}else notes.push(`${esc(nm)}: ${got.length}${check}`);
+   raw.push(...got)}
   catch(err){bad.push(`${esc(nm)}: ${err&&err.msg?err.msg:'couldn’t be read'}`)}}
  if(!raw.length){uploadMsg=bad.join('<br>')||'No transactions found.';return render()}
  const tin=raw.reduce((t,x)=>t+Math.max(0,x.v),0),tout=raw.reduce((t,x)=>t+Math.max(0,-x.v),0),d=raw.map(x=>x.dt).sort((a,b)=>a-b),dl=t=>new Date(t).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
