@@ -260,7 +260,7 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 let S=clone(SAMPLE),edited=false;
 try{const raw=localStorage.getItem(KEY);if(raw){const v=JSON.parse(raw);if(v&&Array.isArray(v.bills)&&v.tank&&Array.isArray(v.goals)&&v.goals.length<=6&&Array.isArray(v.income)){S=v;edited=true}}}catch(e){}
 if(!S.tx||typeof S.tx!=='object')S.tx={};if(!S.rules||typeof S.rules!=='object')S.rules={};if(!(S.open0>=0))S.open0=600;
-function save(keepTx){edited=true;if(!keepTx&&S.tx)delete S.tx[month];try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(typeof updateMenuDot==='function'){updateMenuDot();if(persisted==null)askPersist()}}
+function save(keepTx){edited=true;{const me=document.getElementById('months');if(me)me.style.display=''}if(!keepTx&&S.tx)delete S.tx[month];try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(typeof updateMenuDot==='function'){updateMenuDot();if(persisted==null)askPersist()}}
 const SLOTS=10;
 let month=2;
 const num=v=>{const n=parseFloat(String(v).replace(/[$,\s]/g,''));return isFinite(n)?Math.max(0,n):0};
@@ -738,7 +738,8 @@ function genTx(m){const tx=[],inc=S.income[m]||0;
  if(S.tank.a[m]>0)tx.push({d:2,desc:'Transfer to '+S.tank.name,amt:S.tank.a[m],k:'save',goal:'tank'});
  S.goals.forEach((g,i)=>{if(g.a[m]>0)tx.push({d:16,desc:'Transfer to '+g.name,amt:g.a[m],k:'save',goal:'goal'+i})});
  return tx.sort((a,b)=>a.d-b.d)}
-const txFor=m=>Array.isArray(S.tx[m])&&S.tx[m].length?S.tx[m].filter(t=>t.k==='in'||t.k==='out'||t.k==='save'):genTx(m);
+const txFor=m=>Array.isArray(S.tx[m])&&S.tx[m].length?S.tx[m].filter(t=>t.k==='in'||t.k==='out'||t.k==='save'):edited?[]:genTx(m);
+const blankState=()=>({income:[0,0,0],open0:0,tx:{},bills:[],tank:{name:'Emergency fund',account:'',goal:1000,start:0,target:0,a:[0,0,0]},goals:[],rules:{},layout:(S&&S.layout)||{hidden:[],moved:{},added:[]}});
 function opening(m){let o=S.open0||0;for(let k=0;k<m;k++)o+=txFor(k).reduce((s,x)=>s+(x.k==='in'?x.amt:-x.amt),0);return o}
 function niceUnit(mx){const raw=Math.max(25,mx/(logs.length*0.92));return [25,50,100,150,200,250,500,1000,2000,5000].find(s=>s>=raw)||Math.ceil(raw/1000)*1000}
 function monthStats(m){const tx=txFor(m),open=opening(m);let b=open,mx=Math.max(open,1);tx.forEach(x=>{b+=x.k==='in'?x.amt:-x.amt;mx=Math.max(mx,b)});return{tx,open,end:b,max:mx}}
@@ -799,7 +800,7 @@ function updatePlaybar(){const A=anim;if(!A)return;const d=Math.min(A.days,Math.
  const t=pEl('pToggle'),k=pEl('pSkip');t.textContent=A.done?'↻':A.paused?'▶':'❚❚';t.setAttribute('aria-label',A.done?'Replay':A.paused?'Play':'Pause');k.textContent=A.done?'×':'»';k.setAttribute('aria-label',A.done?'Close playback':'Skip to the end')}
 pEl('pToggle').addEventListener('click',()=>{if(!anim)return;if(anim.done)startAnim();else{anim.paused=!anim.paused;updatePlaybar()}});
 pEl('pSkip').addEventListener('click',()=>{if(!anim)return;if(anim.done)stopAnim();else skipAnim()});
-pEl('playBtn').addEventListener('click',()=>startAnim());
+pEl('playBtn').addEventListener('click',()=>{if(edited&&!(Array.isArray(S.tx[month])&&S.tx[month].length)){uploadMsg=`No statements for ${MONTHS[month]} yet.`;budgetTab='upload';return open({t:'budget'})}startAnim()});
 
 /* Butterflies */
 const flies=[];
@@ -912,6 +913,7 @@ function applyMonth(rerender=true){let overN=0;
  if(rerender&&view)render()}
 const mEl=document.getElementById('months');
 mEl.innerHTML=MONTHS.map((m,i)=>`<button type="button" data-m="${i}">${m}</button>`).join('');
+mEl.style.display=edited?'':'none';
 mEl.addEventListener('click',e=>{const b=e.target.closest('button');if(b){if(anim)stopAnim();month=+b.dataset.m;applyMonth()}});
 
 /* ---------- Sheet views ---------- */
@@ -1143,7 +1145,7 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
   sortNew=null;return sortAssign(key,'b:'+b.id)}
  if(a==='catalog')return open({t:'catalog'});
  if(a==='goMenuRestore'){menuMsg='';return open({t:'menu'})}
- if(a==='startBlank'){if(anim)stopAnim();S={income:[0,0,0],open0:0,tx:{},bills:[],tank:{name:'Emergency fund',account:'',goal:1000,start:0,target:0,a:[0,0,0]},goals:[],rules:{},layout:{hidden:[],moved:{},added:[]}};
+ if(a==='startBlank'){if(anim)stopAnim();S=blankState();
   save(true);buildGarden();gardener.row=-1;applyMonth(false);uploadMsg='';budgetTab='edit';return open({t:'budget'})}
  if(a==='addObj')return addFromCatalog(t.dataset.type);
  if(a==='moveObj')return startMove(SPOTS[t.dataset.spot],false);
@@ -1164,7 +1166,7 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
  if(a==='restoreCancel'){restoreFile=null;restoreReady=null;menuMsg='';view.keep=true;return render()}
  if(a==='goBudget'){menuMsg='';budgetTab=t.dataset.to;return open({t:'budget'})}
  if(a==='install'&&installEvt){installEvt.prompt();installEvt.userChoice.finally(()=>{installEvt=null;view.keep=true;render()});return}
- if(a==='menuReset'){if(!resetArm){resetArm=true;view.keep=true;return render()}resetArm=false;if(anim)stopAnim();S=clone(SAMPLE);S.rules={};edited=false;buildGarden();try{localStorage.removeItem(KEY)}catch(err){}applyMonth(false);updateMenuDot();menuMsg='Back to the sample budget.';view.keep=true;return render()}
+ if(a==='menuReset'){if(!resetArm){resetArm=true;view.keep=true;return render()}resetArm=false;if(anim)stopAnim();S=clone(SAMPLE);S.rules={};edited=false;month=2;document.getElementById('months').style.display='none';buildGarden();try{localStorage.removeItem(KEY)}catch(err){}applyMonth(false);updateMenuDot();menuMsg='Back to the sample budget.';view.keep=true;return render()}
  if(a==='txImport'&&pendingTx){const p=pendingTx;pendingTx=null;try{finishTx(p.raw,p.n)}catch(err){uploadMsg='Those transactions couldn’t be imported.';render()}return}
  if(a==='txCancel'){pendingTx=null;uploadMsg='';view.keep=true;return render()}
  if(a==='pdfImport'&&pendingPDF){const p=pendingPDF;pendingPDF=null;try{importText(null,p.nm,p.rows)}catch(err){uploadMsg='Those transactions couldn’t be imported.';render()}return}
@@ -1181,7 +1183,7 @@ sheet.addEventListener('click',e=>{const t=e.target.closest('[data-act],[data-ta
  if(a==='delRow'){S.bills.splice(+t.dataset.i,1);for(const m in S.tx)recompute(+m);save(true);applyMonth(false);view.keep=true;render()}
  if(a==='addGoal'&&addGoalRow()){view.keep=true;render();return}
  if(a==='delGoal'){S.goals.splice(+t.dataset.g-1,1);buildGarden();save(true);gardener.row=-1;applyMonth(false);sendGardener();view.keep=true;render();return}
- if(a==='reset'){S=clone(SAMPLE);S.rules={};edited=false;buildGarden();try{localStorage.removeItem(KEY)}catch(err){}applyMonth(false);view.keep=true;render()}
+ if(a==='reset'){S=clone(SAMPLE);S.rules={};edited=false;month=2;document.getElementById('months').style.display='none';buildGarden();try{localStorage.removeItem(KEY)}catch(err){}applyMonth(false);view.keep=true;render()}
  if(a==='copyCsv'){const txt=toCSV(),ta=v('tpl');const done=()=>{t.textContent='Copied';setTimeout(()=>t.textContent='Copy current budget as CSV',1600)};
   const fallback=()=>{ta.focus();ta.select();t.textContent='Selected · copy it from the box'};
   try{navigator.clipboard.writeText(txt).then(done,fallback)}catch(err){fallback()}}});
@@ -1421,7 +1423,7 @@ function txRaw(rows,hasHead,h,src=0){const col=(re,d)=>hasHead?h.findIndex(x=>re
 function importTx(rows,hasHead,h){return finishTx(txRaw(rows,hasHead,h,0),1)}
 /* a payment between two of your accounts shows up once in each file: card "Payment, thank you" ↔ checking "Autopay" */
 const PAYLIKE=/payment|autopay|auto pay|pmt|thank you|e-?pay|transfer|xfer|deposit from|withdrawal to|online banking/i;
-function finishTx(raw,files){if(!raw.length)throw 0;
+function finishTx(raw,files){if(!raw.length)throw 0;if(!edited){S=blankState();buildGarden()}const autoCats=!S.bills.length;
  /* which month: a statement cycle (≤35 days) counts as one month even if it crosses into the next */
  const t0=Math.min(...raw.map(x=>x.dt)),t1=Math.max(...raw.map(x=>x.dt)),cyc=(t1-t0)/864e5<=35,cnt={};raw.forEach(x=>cnt[x.mo]=(cnt[x.mo]||0)+1);
  const topMo=+Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0],idx={9:0,10:1,11:2}[topMo],m=idx!=null?idx:month;
@@ -1435,10 +1437,14 @@ function finishTx(raw,files){if(!raw.length)throw 0;
  for(const t of tx){if(t.k==='in'){const r=S.rules[t.key];if(r&&r.t==='ignore')t.k='ignore';else if(/payroll|salary|paycheck|direct dep/i.test(t.desc))t.label='Paycheck';continue}
   if(t.k==='xfer'){if(t.pair===1){const r=S.rules[t.key];if(r&&r.t==='goal'){t.k='save';t.goal=r.g;t.how='rule'}else{const g=goalRef(t.desc);if(g){t.k='save';t.goal=g;t.how='account'}}}continue}
   classify(t,df,limit)}
+ let made=0;if(autoCats){/* no budget yet: each kind of purchase the importer recognizes becomes a set category, budgeted at what was spent */
+  const by={};tx.forEach(t=>{if(t.k==='out'&&!t.bill&&t.hint&&SETBY[t.hint])(by[t.hint]=by[t.hint]||[]).push(t)});
+  for(const id of SET.map(c=>c.id).filter(id=>by[id])){const tot=Math.round(by[id].reduce((x,t)=>x+t.amt,0));const b={id:uid(),name:SETBY[id].name,cat:id,budget:tot,a:[0,0,0],due:'',note:'',spot:null};S.bills.push(b);placeSet(b);by[id].forEach(t=>{t.bill=b.id;t.how='type'});made++}
+  const inc=tx.filter(t=>t.k==='in').reduce((x,t)=>x+t.amt,0);if(inc)S.income=S.income.map(()=>Math.round(inc))}
  tx.forEach(t=>{delete t.v;delete t.pair;delete t.src;t.name=t.label||prettyKey(t.key);delete t.label});
  S.tx[m]=tx.sort((a,b)=>a.d-b.d);month=m;recompute(m);save(true);applyMonth(false);
  const c=k=>tx.filter(t=>t.k===k).length,uns=unsortedOf(m).length,matched=tx.filter(t=>t.k==='out'&&t.bill).length;
- uploadMsg=`<b>${MONTHS[m]}: ${tx.length} transactions</b>${files>1?` from ${files} files`:''} · ${matched} matched${c('save')?` · ${c('save')} to savings`:''}${pairs?` · ${pairs} transfer${pairs===1?'':'s'} between accounts cancelled out`:''}${uns?` · <b>${uns} to sort</b>`:''}`;
+ uploadMsg=`<b>${MONTHS[m]}: ${tx.length} transactions</b>${files>1?` from ${files} files`:''} · ${matched} matched${c('save')?` · ${c('save')} to savings`:''}${pairs?` · ${pairs} transfer${pairs===1?'':'s'} between accounts cancelled out`:''}${made?` · ${made} categories made from your purchases`:''}${uns?` · <b>${uns} to sort</b>`:''}`;
  if(uns){budgetTab='sort';render()}else{budgetTab='upload';render();setTimeout(()=>{if(view&&view.t==='budget'&&budgetTab==='upload')startAnim()},1500)}}
 function sanG(g){return{account:String(g.account||'').slice(0,40),name:String(g.name||'Goal').slice(0,40),goal:num(g.goal),start:num(g.start),target:num(g.target),a:Array.isArray(g.a)&&g.a.length===3?g.a.map(num):[0,0,0]}}
 let catMsg='';
