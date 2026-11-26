@@ -925,6 +925,10 @@ const spotOpts=sel=>Object.values(SPOTS).filter(h=>!h.hidden||h.id===sel).map(h=
 const catOpts=sel=>`<optgroup label="Set categories">${SET.map(c=>{const o=billOfCat(c.id);return `<option value="${c.id}" ${c.id===sel?'selected':''}>${esc(c.name)}${o&&c.id!==sel?' (combine with '+esc(o.name)+')':''}</option>`}).join('')}</optgroup><option value="custom" ${sel==='custom'?'selected':''}>Custom category</option>`;
 const freeOpts=sel=>Object.values(SPOTS).filter(h=>h.id===sel||(!billAt(h.id)&&!h.hidden)).map(h=>`<option value="${h.id}" ${h.id===sel?'selected':''}>${esc(h.room)} · ${esc(h.label)}${h.home&&!billOfCat(h.home)?'':''}</option>`).join('');
 function homelessHTML(){const hl=S.bills.filter(b=>!b.spot||!SPOTS[b.spot]);return hl.length?`<div class="note" style="background:#f3eefc"><b>${hl.length} categor${hl.length===1?'y needs':'ies need'} a spot in the house.</b> Tap ${hl.length===1?'it':'one'} to choose an empty object: ${hl.map(b=>`<button class="btn sm ghost" style="min-height:36px;margin:6px 6px 0 0;background:#fff" data-pick="${b.id}">${esc(b.name)}</button>`).join('')}</div>`:''}
+/* the month's transactions behind a category or savings row */
+function txListHTML(list){const real=Array.isArray(S.tx[month])&&S.tx[month].length;if(!list.length)return `<p class="sub" style="margin-top:12px">No transactions in ${MONTHS[month]}.</p>`;
+ const tot=list.reduce((x,t)=>x+t.amt,0);
+ return `<h3>${MONTHS[month]} transactions <span style="font-weight:500;color:var(--soft)">· ${list.length} · ${money2(tot)}${real?'':' · example'}</span></h3><div style="max-height:240px;overflow:auto;background:#fff;border-radius:14px;padding:4px 12px">${list.slice().sort((a,b)=>a.d-b.d).map(t=>`<div style="display:grid;grid-template-columns:50px minmax(0,1fr) auto;gap:8px;padding:7px 0;border-bottom:1px solid #f1ecf6;font-size:14px"><span style="color:var(--soft)">${t.on?dayLabel(t.on):MONTHS[month]+' '+t.d}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.desc)}">${esc(t.name||t.desc)}</span><b>${money2(t.amt)}</b></div>`).join('')}</div>`}
 const linesHTML=b=>(b.lines&&(b.lines.length>1||b.lines[0].name!==b.name)?`<p class="sub" style="margin-top:8px;grid-column:1 / -1">From your budget: ${b.lines.map(l=>`${esc(l.name)} ${fmt(l.budget)}`).join(' · ')}</p>`:'')+
  (coversOf(b).length?`<p class="sub" style="margin-top:8px;grid-column:1 / -1">Collects purchases of ${coversOf(b).filter(id=>!billOfCat(id)).map(id=>esc(SETBY[id].name)).join(' and ')||'nothing (those have their own spots)'}.</p>`:'');
 function histHTML(arr,cur){const mx=Math.max(...arr,1);return `<div class="hist">${arr.map((v,i)=>`<div class="${i===cur?'cur':''}"><em>${fmt(v)}</em><i style="height:${Math.max(6,v/mx*70)}px"></i>${MONTHS[i]}</div>`).join('')}</div>`}
@@ -934,7 +938,7 @@ function vBill(b){const v=b.a[month],d=v-b.budget,over=d>0,h=SPOTS[b.spot],cu=b.
  <div class="big"><b>${fmt(v)}</b><span class="pill ${over?'over':'ok'}">${d===0?'Right on budget':over?fmt(d)+' over budget':fmt(-d)+' under budget'}</span></div>
  <div class="meter ${over?'over':''}"><i style="width:${b.budget?Math.min(100,v/b.budget*100):100}%"></i></div>
  <p class="sub">Budget ${fmt(b.budget)} a month · ${S.income[month]?(v/S.income[month]*100).toFixed(1):0}% of take-home pay</p>${linesHTML(b)}
- ${histHTML(b.a,month)}${b.note?`<p class="note">${esc(b.note)}</p>`:''}
+ ${txListHTML(txFor(month).filter(t=>t.k==='out'&&t.bill===b.id))}${histHTML(b.a,month)}${b.note?`<p class="note">${esc(b.note)}</p>`:''}
  <details class="edit" ${h?'':'open'}><summary>Edit this category</summary>
   <label class="f">Name<input type="text" id="e-name" value="${esc(b.name)}"></label>
   <div class="grid2" style="margin-top:10px"><label class="f">Monthly budget<input type="number" inputmode="decimal" id="e-budget" value="${b.budget}"></label><label class="f">Spent in ${MONTHS[month]}<input type="number" inputmode="decimal" id="e-spent" value="${v}"></label></div>
@@ -962,7 +966,7 @@ function goalView(h){const tank=h.kind==='tank',g=tank?S.tank:S.goals[h.gi],v=g.
  <div class="big"><b>${fmt(v)}</b><span class="pill ${met?'ok':'over'}">${met?(v>g.target?fmt(v-g.target)+' above target':'Target met'):fmt(g.target-v)+' short of target'}</span></div>
  <div class="meter ${tank?'water':''}"><i style="width:${g.goal?Math.min(100,bal/g.goal*100):0}%"></i></div>
  <p class="sub">${fmt(bal)} saved of ${fmt(g.goal)} · target ${fmt(g.target)} a month</p>
- ${histHTML(g.a,month)}<p class="note">${left?(mo?`At ${fmt(g.target)} a month the ${tank?'tank fills':'goal is reached'} in about ${mo} month${mo===1?'':'s'}.`:'Set a monthly target to see when.'):'Goal reached!'} ${tank?'':'Each plant is 10% of the goal.'}</p>`}
+ ${histHTML(g.a,month)}<p class="note">${left?(mo?`At ${fmt(g.target)} a month the ${tank?'tank fills':'goal is reached'} in about ${mo} month${mo===1?'':'s'}.`:'Set a monthly target to see when.'):'Goal reached!'} ${tank?'':'Each plant is 10% of the goal.'}</p>${txListHTML(txFor(month).filter(t=>t.k==='save'&&t.goal===(tank?'tank':'goal'+h.gi)))}`}
 let liveT=null;
 sheet.addEventListener('input',e=>{const el=e.target,k=el.dataset.live;if(!k)return;const g=goalOf(el.dataset.gid);if(!g)return;const n=num(el.value);
  if(k==='name')g.name=el.value.slice(0,40);
@@ -1437,7 +1441,7 @@ function finishTx(raw,files){if(!raw.length)throw 0;if(!edited){S=blankState();b
  const t0=Math.min(...raw.map(x=>x.dt)),t1=Math.max(...raw.map(x=>x.dt)),cyc=(t1-t0)/864e5<=35,cnt={};raw.forEach(x=>cnt[x.mo]=(cnt[x.mo]||0)+1);
  const topMo=+Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0],idx={9:0,10:1,11:2}[topMo],m=idx!=null?idx:month;
  const list=cyc?raw:raw.filter(x=>x.mo===topMo),base=cyc?t0:Math.min(...list.map(x=>x.dt));
- const tx=list.map(x=>({d:clamp(Math.round((x.dt-base)/864e5)+1,1,DAYS[m]),desc:x.desc,cat:x.cat,amt:Math.abs(x.v),v:x.v,src:x.src||0,key:mkey(x.desc),k:x.v>0?'in':'out'}));
+ const tx=list.map(x=>({d:clamp(Math.round((x.dt-base)/864e5)+1,1,DAYS[m]),on:new Date(x.dt).toISOString().slice(0,10),desc:x.desc,cat:x.cat,amt:Math.abs(x.v),v:x.v,src:x.src||0,key:mkey(x.desc),k:x.v>0?'in':'out'}));
  /* money that left one account and arrived in another within 3 days is just moving around: pair it up */
  const outs=tx.filter(t=>t.v<0),ins=tx.filter(t=>t.v>0);let pairs=0;
  const linked=(o,i)=>isXfer(o.desc)&&isXfer(i.desc)||(o.src!==i.src&&(PAYLIKE.test(o.desc)||PAYLIKE.test(i.desc)));
