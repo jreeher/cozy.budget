@@ -115,7 +115,7 @@ details.edit summary{cursor:pointer;font-weight:600;min-height:40px;display:flex
 .sheet{z-index:5}
 .play{position:fixed;z-index:4;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(580px,calc(100% - 24px));background:#fffaf7f0;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:22px;box-shadow:0 14px 40px #5a3f8a33;padding:12px 14px;display:none;gap:12px;align-items:center}
 body.playing .play{display:flex}
-body.playing .bar{opacity:0;pointer-events:none}body.playing .bar>*{pointer-events:none}
+body.playing .play{bottom:calc(max(16px,env(safe-area-inset-bottom)) + 60px)}body.playing #hint,body.playing #playBtn{display:none}body.sheet-open .play,body.sheet-open #toasts{opacity:0;pointer-events:none}
 .play .day{font-weight:700;font-size:20px;min-width:76px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .play .track2{flex:1;height:10px;border-radius:99px;background:#efe9f5;overflow:hidden}.play .track2 i{display:block;height:100%;background:var(--lav);border-radius:99px;width:0}
 .play .bal{font-size:13px;color:var(--soft);white-space:nowrap}.play .bal b{display:block;font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}
@@ -699,7 +699,7 @@ function sendGardener(){if(anim&&!anim.done)return;const r=activeRow(),G=gardene
  if(r<0){route(HOME_SPOT);G.after='idle';return}route(V(rows[r].lane,pickSlotZ(r)));G.after='water'}
 
 /* ---------- Monthly playback ---------- */
-const DAYS=[30,31,30],DAYDUR=1.6;
+const DAYS=[30,31,30],DAYDUR=3.2;
 let anim=null;
 const Sound={ctx:null,out:null,on:true,master:null,bus:null,crk:null,noise:null,timer:null,step:0,next:0,
  ensure(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return false;if(!this.ctx){this.ctx=new AC();this.out=this.ctx.createGain();this.out.gain.value=this.on?1:0;this.out.connect(this.ctx.destination)}if(this.ctx.state==='suspended')this.ctx.resume().catch(()=>{});return true},
@@ -791,17 +791,27 @@ function nextTask(){const A=anim;if(!A||A.done)return;const k=A.queue.shift();if
 function setCoin(h,k){if(!h.badge.visible)return;h.badge.material.map=coin[k].t;h.badge.material.needsUpdate=true}
 function restoreCoins(){for(const id in SPOTS){const h=SPOTS[id];if(h.status!=='none')setCoin(h,h.status)}}
 function finishAnim(){const A=anim;if(!A)return;restoreCoins();A.done=true;A.phase='done';A.t=A.days;A.tq=[];A.reached=new Set(['tank',...S.goals.map((g,i)=>i)]);gardenTargets();restPile();updatePlaybar();
- const G=gardener;G.onArrive=null;G.onDone=null;setTimeout(()=>{if(anim===A)sendGardener()},1400);setTimeout(()=>{if(anim===A)Sound.stop(3)},6000)}
+ const G=gardener;G.onArrive=null;G.onDone=null;setTimeout(()=>{if(anim===A)sendGardener()},1400);setTimeout(()=>{if(anim===A)Sound.stop(3)},7000);setTimeout(()=>loopAgain(A),11000)}
 function skipAnim(){const A=anim;if(!A||A.done)return;while(A.i<A.ev.length){const e=A.ev[A.i++];A.bal+=e.k==='in'?e.amt:-e.amt}A.queue=[];finishAnim()}
 function stopAnim(){if(!anim)return;anim=null;restoreCoins();Sound.stop();document.body.classList.remove('playing');restPile();gardenTargets();sendGardener()}
+/* ---------- Always playing: loops the newest full month that has transactions ---------- */
+function loopMonth(){if(!edited)return month;const has=m=>Array.isArray(S.tx[m])&&S.tx[m].length,span=m=>{const d=S.tx[m].map(t=>t.d);return Math.max(...d)-Math.min(...d)};
+ for(let m=2;m>=0;m--)if(has(m)&&span(m)>=20)return m;for(let m=2;m>=0;m--)if(has(m))return m;return -1}
+let autoT=null;
+function autoPlay(delay=1500,pick=false){clearTimeout(autoT);autoT=setTimeout(()=>{if(anim)return;if(view||mv||document.hidden)return autoPlay(3000,pick);
+ if(pick){const m=loopMonth();if(m<0)return;if(m!==month){month=m;applyMonth(false)}}
+ else if(edited&&!(Array.isArray(S.tx[month])&&S.tx[month].length))return;startAnim()},delay)}
+function loopAgain(A){if(anim!==A)return;if(view||mv||document.hidden||A.paused)return setTimeout(()=>loopAgain(A),3000);startAnim()}
+document.addEventListener('pointerdown',()=>{try{if(Sound.ctx&&Sound.ctx.state==='suspended')Sound.ctx.resume()}catch(e){}},{passive:true});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!anim)autoPlay(1200)});
 const pEl=id=>document.getElementById(id);
 function updatePlaybar(){const A=anim;if(!A)return;const d=Math.min(A.days,Math.floor(A.t)+1);
  pEl('pDay').textContent=`${MONTHS[month]} ${A.phase==='month'||A.phase==='intro'?d:A.days}`;pEl('pBar').style.width=(A.t/A.days*100)+'%';
  const pb=pEl('pBal');pb.textContent=(A.bal<0?'−':'')+fmt(Math.abs(A.bal));pb.classList.toggle('neg',A.bal<0);
- pEl('pCap').textContent=A.phase==='intro'?'Heading to the woodpile…':A.phase==='month'?(A.paused?'Paused':'Paychecks get chopped onto the woodpile · spending feeds the stove'):A.phase==='end'?'Month’s done · off to tend the savings':`${MONTHS[month]}: ${fmt(A.inT)} in · ${fmt(A.outT)} spent · ${fmt(A.saveT)} saved`;
+ pEl('pCap').textContent=A.phase==='intro'?'Heading to the woodpile…':A.phase==='month'?(A.paused?'Paused':'Paychecks stack wood · spending feeds the stove'):A.phase==='end'?'Month’s done · off to tend the savings':`${MONTHS[month]}: ${fmt(A.inT)} in · ${fmt(A.outT)} spent · ${fmt(A.saveT)} saved`;
  const t=pEl('pToggle'),k=pEl('pSkip');t.textContent=A.done?'↻':A.paused?'▶':'❚❚';t.setAttribute('aria-label',A.done?'Replay':A.paused?'Play':'Pause');k.textContent=A.done?'×':'»';k.setAttribute('aria-label',A.done?'Close playback':'Skip to the end')}
 pEl('pToggle').addEventListener('click',()=>{if(!anim)return;if(anim.done)startAnim();else{anim.paused=!anim.paused;updatePlaybar()}});
-pEl('pSkip').addEventListener('click',()=>{if(!anim)return;if(anim.done)stopAnim();else skipAnim()});
+pEl('pSkip').addEventListener('click',()=>{if(!anim)return;if(anim.done)startAnim();else skipAnim()});
 pEl('playBtn').addEventListener('click',()=>{if(edited&&!(Array.isArray(S.tx[month])&&S.tx[month].length)){uploadMsg=`No statements for ${MONTHS[month]} yet.`;budgetTab='upload';return open({t:'budget'})}startAnim()});
 
 /* Butterflies */
@@ -876,7 +886,7 @@ function endMove(keep){if(!mv)return;const h=mv.h;
   else if(x===h.orig.x&&z===h.orig.z&&!k)delete L.moved[h.id];else L.moved[h.id]={x,z,k};save(true)}
  else if(mv.isNew){const L=layout();L.added=L.added.filter(a=>a.id!==h.id);dropObj(h);save(true)}
  else setPose(h,mv.x0,mv.z0,mv.k0);
- mv=null;fpMesh.visible=false;document.body.classList.remove('moving');selected=null;applyMonth(false)}
+ mv=null;fpMesh.visible=false;document.body.classList.remove('moving');selected=null;applyMonth(false);autoPlay(2000)}
 const gplane=new THREE.Plane(new THREE.Vector3(0,1,0),-0.3),gp=new THREE.Vector3();
 function groundAt(e){const r=canvas.getBoundingClientRect();ndc.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height)*2+1);ray.setFromCamera(ndc,cam);if(!ray.ray.intersectPlane(gplane,gp))return null;return world.worldToLocal(gp.clone())}
 const snap=v=>Math.round(v*4)/4;
@@ -916,7 +926,7 @@ function applyMonth(rerender=true){let overN=0;
 const mEl=document.getElementById('months');
 mEl.innerHTML=MONTHS.map((m,i)=>`<button type="button" data-m="${i}">${m}</button>`).join('');
 mEl.style.display=edited?'':'none';
-mEl.addEventListener('click',e=>{const b=e.target.closest('button');if(b){if(anim)stopAnim();month=+b.dataset.m;applyMonth()}});
+mEl.addEventListener('click',e=>{const b=e.target.closest('button');if(b){if(anim)stopAnim();month=+b.dataset.m;applyMonth();autoPlay(700)}});
 
 /* ---------- Sheet views ---------- */
 const sheet=document.getElementById('sheet');let view=null,selected=null,budgetTab='overview',uploadMsg='';
@@ -1134,7 +1144,7 @@ function render(){if(!view)return;let html='';
   f.addEventListener('change',()=>go(f.files));['dragenter','dragover'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add('on')}));
   ['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('on')}));d.addEventListener('drop',e=>go(e.dataTransfer.files))}}
 function open(v){view=v;render()}
-function close(){sheet.classList.remove('open');document.body.classList.remove('sheet-open');view=null;selected=null;flyTo(null)}
+function close(){sheet.classList.remove('open');document.body.classList.remove('sheet-open');view=null;selected=null;flyTo(null);if(!anim&&typeof autoPlay==='function')autoPlay(2000)}
 function select(id){const h=byId[id];if(!h)return;if(h.kind==='hoe')return hoeAddRow();selected=h;
  if(h.kind==='spot'){const b=billAt(id);open(b?{t:'bill',id:b.id}:{t:'spot',id})}else if(h.kind==='pile')open({t:'pile'});else open({t:'goal',id});flyTo(h)}
 function pick(id){if(id==='__sort'){budgetTab='sort';return open({t:'budget'})}if(byId[id])return select(id);const b=billById(id);if(!b)return;if(b.spot&&SPOTS[b.spot])select(b.spot);else{selected=null;open({t:'bill',id})}}
@@ -1545,7 +1555,7 @@ function tickGardener(dt,t){const G=gardener,g=G.g;
    G.timer-=dt;if(G.timer<=0){if(G.state==='work'){G.state='wait';const f=G.onDone;G.onDone=null;f&&f()}else if(G.row>=0){route(V(g.position.x,pickSlotZ(G.row)));G.after='water'}else G.state='idle'}}
   else if(G.state==='chop'){G.face=Math.atan2(BLOCK.x-g.position.x,BLOCK.z-g.position.z);G.chopT+=dt;const ph=G.chopT/0.62;
    const ang=ph<0.6?-0.4-2.6*(ph/0.6):-3.0+2.2*Math.min(1,(ph-0.6)/0.14);G.armR.rotation.x=ang;G.armL.rotation.x=ang*0.85;
-   if(!G.hit&&ph>=0.74){G.hit=true;Sound.chop();if(!reduce){fly(BLOCK,pileTop(),0.55,null,0.42);fly(BLOCK,pileTop(),0.7,null,0.38)}}
+   if(!G.hit&&ph>=0.74){G.hit=true;if(!reduce){fly(BLOCK,pileTop(),0.55,null,0.42);fly(BLOCK,pileTop(),0.7,null,0.38)}}
    if(ph>=1){G.chopT=0;G.hit=false;if(--G.chopN<=0)G.state='fire'}}
   else if(G.state==='fire'){G.face=Math.atan2(1.9-g.position.x,-2.5-g.position.z);G.can.rotation.x=0;G.armL.rotation.x=-0.3;
    if(G.toss>0){G.toss=Math.max(0,G.toss-dt);G.armR.rotation.x=-2.4*Math.sin((1-G.toss/0.35)*Math.PI)}else G.armR.rotation.x=-0.25}
@@ -1581,6 +1591,7 @@ tankLevel=S.tank.goal?clamp(balance(S.tank,month)/S.tank.goal,0,1):0;
 {const r=activeRow();gardener.row=r;if(r>=0){gardener.g.position.set(rows[r].lane,0.25,pickSlotZ(r));gardener.path=[];gardener.state='water';gardener.timer=2}}
 restPile();pileShown=pileTarget;logs.forEach((l,i)=>l.g.visible=i<pileShown);
 updateMenuDot();if(edited)askPersist();
+autoPlay(2500,true);
 if(document.fonts)document.fonts.ready.then(()=>{for(const k in COINS){coinDraw(coin[k].c.getContext('2d'),...COINS[k]);coin[k].t.needsUpdate=true}S.goals.forEach((g,i)=>packetDraw(i,month));plaqueDraw(month)});
 
 tick();
